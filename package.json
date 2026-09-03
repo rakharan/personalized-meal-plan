@@ -1,0 +1,29 @@
+{
+  "name": "hermes-mealplan-bot",
+  "version": "2.0.0",
+  "description": "Telegram bot that collects user preferences and generates a daily meal plan via a locally-hosted Hermes LLM (OpenAI-compatible API).",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "dashboard": "tsx src/dashboard.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "start:dashboard": "node dist/dashboard.js",
+    "migrate": "tsx src/migrate-sqlite-to-pg.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "pg": "^8.23.0",
+    "telegraf": "^4.16.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.4.1",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

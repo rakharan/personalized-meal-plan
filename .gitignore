@@ -1,0 +1,6 @@
+*.env
+node_modules
+dist
+mealplan.db
+mealplan.db-shm
+mealplan.db-wal
