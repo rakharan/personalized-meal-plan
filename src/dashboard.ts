@@ -329,23 +329,24 @@ function renderPage(title: string, body: string): string {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
-    /* ── Dark theme (default) — Linear-inspired ── */
+    /* ── Dark theme (default) — Warm Kitchen ── */
     :root {
-      --bg: #08090a;
-      --surface: #0f1011;
-      --surface2: #191a1b;
-      --surface3: #28282c;
-      --fg: #f7f8f8;
-      --fg2: #d0d6e0;
-      --fg3: #8a8f98;
-      --fg4: #62666d;
-      --accent: #5e6ad2;
-      --accent-hi: #7170ff;
-      --accent-soft: rgba(94,106,210,0.12);
+      --bg: #1a1612;
+      --surface: #241F1B;
+      --surface2: #2D2823;
+      --surface3: #3A342E;
+      --fg: #E8E0D5;
+      --fg2: #C4B8A8;
+      --fg3: #8A7E72;
+      --fg4: #5C5248;
+      --primary: #52B788;
+      --accent: #F59E0B;
+      --accent-soft: rgba(245,158,11,0.10);
+      --primary-soft: rgba(82,183,136,0.12);
       --border: rgba(255,255,255,0.06);
       --border2: rgba(255,255,255,0.09);
-      --green: #27a644;
-      --red: #e5484d;
+      --green: #52B788;
+      --red: #E5484D;
       --shadow: 0 0 0 1px var(--border);
       --shadow-lg: 0 0 0 1px var(--border2), 0 4px 12px rgba(0,0,0,0.3);
       --radius: 8px;
@@ -355,19 +356,22 @@ function renderPage(title: string, body: string): string {
     /* ── Light theme (auto) ── */
     @media (prefers-color-scheme: light) {
       :root {
-        --bg: #fbfbfd;
-        --surface: #ffffff;
-        --surface2: #f4f5f7;
-        --surface3: #e8eaed;
-        --fg: #1a1a2e;
-        --fg2: #3c4150;
-        --fg3: #6b7280;
-        --fg4: #9ca3af;
-        --accent: #5e6ad2;
-        --accent-hi: #4a55b8;
-        --accent-soft: rgba(94,106,210,0.08);
+        --bg: #FDF8F3;
+        --surface: #FFFFFF;
+        --surface2: #F5F0E8;
+        --surface3: #EDE5D8;
+        --fg: #2D2A26;
+        --fg2: #4A4540;
+        --fg3: #7A7268;
+        --fg4: #A09890;
+        --primary: #2D6A4F;
+        --accent: #E07856;
+        --accent-soft: rgba(224,120,86,0.10);
+        --primary-soft: rgba(45,106,79,0.08);
         --border: rgba(0,0,0,0.07);
         --border2: rgba(0,0,0,0.10);
+        --green: #2D6A4F;
+        --red: #C62828;
         --shadow: 0 0 0 1px var(--border);
         --shadow-lg: 0 0 0 1px var(--border2), 0 4px 16px rgba(0,0,0,0.06);
       }
@@ -379,6 +383,7 @@ function renderPage(title: string, body: string): string {
       background:var(--bg); color:var(--fg);
       padding:0;
       -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
     }
     /* ── Layout shell ── */
     .shell { display:flex; min-height:100vh; }
@@ -388,8 +393,11 @@ function renderPage(title: string, body: string): string {
       padding:20px 0; position:fixed; height:100vh; overflow-y:auto;
       display:flex; flex-direction:column;
     }
-    .sidebar-brand { padding:0 20px 24px; font-size:15px; font-weight:600; letter-spacing:-0.01em; color:var(--fg); }
-    .sidebar-brand span { color:var(--accent); }
+    .sidebar-brand {
+      padding:0 20px 24px; font-size:15px; font-weight:600;
+      letter-spacing:-0.01em; color:var(--fg);
+    }
+    .sidebar-brand span { color:var(--primary); }
     .nav { flex:1; }
     .nav a {
       display:flex; align-items:center; gap:10px;
@@ -398,7 +406,7 @@ function renderPage(title: string, body: string): string {
       transition:color .15s, background .15s;
     }
     .nav a:hover { color:var(--fg2); background:var(--surface2); }
-    .nav a.active { color:var(--fg); background:var(--accent-soft); border-left-color:var(--accent); }
+    .nav a.active { color:var(--fg); background:var(--primary-soft); border-left-color:var(--primary); }
     .nav a .icon { font-size:15px; width:20px; text-align:center; }
     .main { flex:1; margin-left:220px; padding:32px 40px; max-width:1200px; }
     /* ── Headings ── */
@@ -408,10 +416,11 @@ function renderPage(title: string, body: string): string {
     .stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:28px; }
     .stat-card {
       background:var(--surface); border-radius:var(--radius); padding:18px 20px;
-      box-shadow:var(--shadow); transition:box-shadow .2s;
+      box-shadow:var(--shadow); transition:box-shadow .2s, transform .12s;
     }
     .stat-card:hover { box-shadow:var(--shadow-lg); }
-    .stat-num { font-size:1.75rem; font-weight:600; letter-spacing:-0.03em; color:var(--fg); }
+    .stat-card:active { transform:scale(0.98); }
+    .stat-num { font-size:1.75rem; font-weight:600; letter-spacing:-0.03em; color:var(--fg); font-variant-numeric:tabular-nums; }
     .stat-label { font-size:12px; color:var(--fg3); margin-top:2px; }
     /* ── Chart cards ── */
     .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:28px; }
@@ -419,7 +428,7 @@ function renderPage(title: string, body: string): string {
     .bars { display:flex; flex-direction:column; gap:6px; }
     .bar-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
     .bar-row:last-child { border-bottom:none; }
-    .bar-row .val { font-weight:600; color:var(--fg); }
+    .bar-row .val { font-weight:600; color:var(--fg); font-variant-numeric:tabular-nums; }
     .bar-row .lbl { color:var(--fg3); text-transform:capitalize; }
     /* ── Tables ── */
     .table-wrap { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; margin-bottom:20px; }
@@ -428,16 +437,17 @@ function renderPage(title: string, body: string): string {
     th { font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:0.04em; color:var(--fg3); border-bottom:1px solid var(--border); background:var(--surface2); }
     td { font-size:13px; color:var(--fg2); border-bottom:1px solid var(--border); }
     tbody tr:last-child td { border-bottom:none; }
+    tbody tr { transition:background .12s; }
     tbody tr:hover { background:var(--surface2); }
     .empty-row { text-align:center; color:var(--fg4); padding:24px; }
     /* ── Pagination ── */
     .pagination { display:flex; gap:12px; align-items:center; justify-content:center; margin:16px 0; font-size:13px; }
-    .pagination a { color:var(--accent-hi); text-decoration:none; padding:6px 12px; border-radius:var(--radius-sm); }
-    .pagination a:hover { background:var(--accent-soft); }
+    .pagination a { color:var(--primary); text-decoration:none; padding:6px 12px; border-radius:var(--radius-sm); transition:background .12s; }
+    .pagination a:hover { background:var(--primary-soft); }
     .pagination span { color:var(--fg3); }
     /* ── Back link ── */
     .back-link { margin:20px 0; font-size:13px; }
-    .back-link a { color:var(--fg3); text-decoration:none; }
+    .back-link a { color:var(--fg3); text-decoration:none; transition:color .12s; }
     .back-link a:hover { color:var(--fg2); }
     /* ── Login ── */
     .login-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; }
@@ -451,22 +461,25 @@ function renderPage(title: string, body: string): string {
       width:100%; padding:10px 14px; border-radius:var(--radius-sm);
       background:var(--surface2); border:1px solid var(--border);
       color:var(--fg); font-size:14px; font-family:inherit; margin-bottom:12px;
-      transition:border-color .15s;
+      transition:border-color .15s, transform .12s;
     }
-    .login-card input:focus { outline:none; border-color:var(--accent); }
+    .login-card input:focus { outline:none; border-color:var(--primary); }
     .login-card button {
       width:100%; padding:10px 16px; border-radius:var(--radius-sm);
-      background:var(--accent); color:#fff; border:none; font-size:14px;
-      font-weight:500; font-family:inherit; cursor:pointer; transition:background .15s;
+      background:var(--primary); color:#fff; border:none; font-size:14px;
+      font-weight:500; font-family:inherit; cursor:pointer; transition:background .15s, transform .12s;
     }
-    .login-card button:hover { background:var(--accent-hi); }
+    .login-card button:hover { filter:brightness(1.1); }
+    .login-card button:active { transform:scale(0.96); }
     /* ── Misc ── */
-    .nav-old { display:none; }
-    a { color:var(--accent-hi); }
+    a { color:var(--primary); }
     ::selection { background:var(--accent-soft); }
     @media (max-width:768px) {
       .sidebar { display:none; }
       .main { margin-left:0; padding:20px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation:none !important; transition:none !important; }
     }
   </style>
 </head>
