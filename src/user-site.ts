@@ -1,0 +1,532 @@
+import 'dotenv/config';
+import express from 'express';
+import { pool, migrateSchema, getUser, getPlans, getPlan } from './store.js';
+import type { Request, Response } from 'express';
+import type { User, Plan } from './store.js';
+
+const PORT = Number(process.env.USER_SITE_PORT ?? 3001);
+
+const app = express();
+app.use(express.urlencoded({ extended: true }));
+
+function parseCookies(req: Request): Record<string, string> {
+  const header = req.headers.cookie;
+  if (!header) return {};
+  const out: Record<string, string> = {};
+  for (const pair of header.split(';')) {
+    const [k, ...v] = pair.trim().split('=');
+    if (k) out[k] = decodeURIComponent(v.join('='));
+  }
+  return out;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// User resolution — ?uid=<chat_id> or cookie
+// ────────────────────────────────────────────────────────────────────────────
+async function resolveUser(req: Request): Promise<User | null> {
+  const uid = req.query.uid as string || parseCookies(req).uid;
+  if (!uid) return null;
+  return getUser(Number(uid));
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Landing — redirect to meals or show uid prompt
+// ────────────────────────────────────────────────────────────────────────────
+app.get('/', async (req: Request, res: Response) => {
+  const user = await resolveUser(req);
+  if (user) { res.redirect('/meals?uid=' + user.chatId); return; }
+  res.send(renderPage('Welcome', `
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-icon">🍱</div>
+        <h1 style="font-size:1.5rem;margin-bottom:4px">MealPlan</h1>
+        <p class="login-sub">Enter your chat ID to view your plans</p>
+        <form method="GET" action="/meals">
+          <input type="text" name="uid" placeholder="Your Chat ID" autofocus />
+          <button type="submit">Continue →</button>
+        </form>
+      </div>
+    </div>
+  `));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Meals — today's plan + saved plans
+// ────────────────────────────────────────────────────────────────────────────
+app.get('/meals', async (req: Request, res: Response) => {
+  const user = await resolveUser(req);
+  if (!user) { res.redirect('/'); return; }
+  res.setHeader('Set-Cookie', `uid=${user.chatId}; Path=/; Max-Age=86400; SameSite=Lax`);
+
+  const plans = await getPlans(user.chatId);
+  const lastPlan = plans.length > 0 ? plans[0] : null;
+  const lastAnswers = user.lastAnswers || user.answers;
+
+  // Build meal cards from lastAnswers (stored plan content)
+  const mealCards = lastAnswers && (lastAnswers as any).meals
+    ? renderMealCards((lastAnswers as any).meals)
+    : lastAnswers && (lastAnswers as any).plan
+      ? `<div class="meal" style="white-space:pre-wrap;line-height:1.6">${escapeHtml((lastAnswers as any).plan)}</div>`
+      : '<p class="empty">No meal plan generated yet. Use the bot to create one! 🍽️</p>';
+
+  // 7-day date strip
+  const today = new Date();
+  const dateStrip = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - today.getDay() + i);
+    const isToday = d.toDateString() === today.toDateString();
+    const dayName = d.toLocaleDateString('en', { weekday: 'short' });
+    const dayNum = d.getDate();
+    return `<div class="date-chip ${isToday ? 'active' : ''}"><span class="day-name">${dayName}</span><span class="day-num">${dayNum}</span></div>`;
+  }).join('');
+
+  res.send(renderPage('Meals', `
+    <div class="date-strip">${dateStrip}</div>
+    <div class="meals">
+      ${mealCards}
+    </div>
+    <div class="section-head">
+      <h3>Saved Plans</h3>
+    </div>
+    ${plans.length > 0
+      ? `<div class="plan-list">${plans.map((p: Plan) => `
+          <a href="/plan/${p.id}?uid=${user.chatId}" class="plan-item">
+            <span class="plan-name">${escapeHtml(p.name)}</span>
+            <span class="plan-date">${new Date(p.created).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>
+          </a>`).join('')}</div>`
+      : '<p class="empty">No saved plans yet</p>'
+    }
+  `, user));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Plan detail
+// ────────────────────────────────────────────────────────────────────────────
+app.get('/plan/:id', async (req: Request, res: Response) => {
+  const user = await resolveUser(req);
+  if (!user) { res.redirect('/'); return; }
+
+  const planId = Number(req.params.id);
+  const plan = await getPlan(planId);
+  if (!plan || plan.chatId !== user.chatId) {
+    res.send(renderPage('Not Found', '<p class="empty">Plan not found</p>', user));
+    return;
+  }
+
+  const answers = plan.answers as any;
+  const content = answers.meals
+    ? renderMealCards(answers.meals)
+    : answers.plan
+      ? `<div class="meal" style="white-space:pre-wrap;line-height:1.6">${escapeHtml(answers.plan)}</div>`
+      : '<p class="empty">Empty plan</p>';
+
+  res.send(renderPage(escapeHtml(plan.name), `
+    <div class="meals">${content}</div>
+    <div class="plan-meta">
+      <span>📅 ${new Date(plan.created).toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+      ${answers.goal ? `<span>🎯 ${escapeHtml(answers.goal)}</span>` : ''}
+      ${answers.calories ? `<span>🔥 ${escapeHtml(answers.calories)} cal</span>` : ''}
+      ${answers.cuisine ? `<span>🍜 ${escapeHtml(answers.cuisine)}</span>` : ''}
+    </div>
+  `, user));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Streak
+// ────────────────────────────────────────────────────────────────────────────
+app.get('/streak', async (req: Request, res: Response) => {
+  const user = await resolveUser(req);
+  if (!user) { res.redirect('/'); return; }
+
+  // Get usage history for last 7 days
+  const usageRows = await pool.query(
+    "SELECT date(created) as day, SUM(tokens)::int as tokens, COUNT(*)::int as calls FROM usage_log WHERE chat_id = $1 AND created >= NOW() - INTERVAL '7 days' GROUP BY date(created) ORDER BY day DESC",
+    [user.chatId]
+  );
+
+  const usageBars = usageRows.rows.length > 0
+    ? usageRows.rows.map((r: any) => {
+        const max = Math.max(...usageRows.rows.map((x: any) => Number(x.tokens) || 0), 1);
+        const pct = Math.round(((Number(r.tokens) || 0) / max) * 100);
+        return `<div class="bar-row"><span class="lbl">${r.day}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div><span class="val">${r.tokens || 0}</span></div>`;
+      }).join('')
+    : '<p class="empty">No usage this week</p>';
+
+  res.send(renderPage('Streak', `
+    <div class="streak-hero">
+      <div class="streak-num">${user.streak}</div>
+      <div class="streak-label">🔥 Day Streak</div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-num">${user.lastPushed || '—'}</div><div class="stat-label">Last Pushed</div></div>
+      <div class="stat-card"><div class="stat-num">${user.subscribed ? '✅' : '❌'}</div><div class="stat-label">Subscribed</div></div>
+      <div class="stat-card"><div class="stat-num">${user.tier}</div><div class="stat-label">Tier</div></div>
+    </div>
+    <h3>This Week's Usage</h3>
+    <div class="bars">${usageBars}</div>
+  `, user));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Settings
+// ────────────────────────────────────────────────────────────────────────────
+app.get('/settings', async (req: Request, res: Response) => {
+  const user = await resolveUser(req);
+  if (!user) { res.redirect('/'); return; }
+
+  const a = user.answers;
+  const pushTime = user.pushHour !== null
+    ? `${String(user.pushHour).padStart(2, '0')}:${String(user.pushMin ?? 0).padStart(2, '0')}`
+    : '08:00 (default)';
+
+  res.send(renderPage('Settings', `
+    <div class="settings-list">
+      <div class="setting-row"><span class="lbl">🎯 Goal</span><span class="val">${a.goal || '—'}</span></div>
+      <div class="setting-row"><span class="lbl">🥗 Restrictions</span><span class="val">${a.restrictions || 'None'}</span></div>
+      <div class="setting-row"><span class="lbl">⚠️ Allergies</span><span class="val">${a.allergies || 'None'}</span></div>
+      <div class="setting-row"><span class="lbl">🔥 Calories</span><span class="val">${a.calories || 'Auto'}</span></div>
+      <div class="setting-row"><span class="lbl">🍽️ Meals/Day</span><span class="val">${a.mealsPerDay || '3'}</span></div>
+      <div class="setting-row"><span class="lbl">🥩 Protein</span><span class="val">${a.protein || 'Auto'}</span></div>
+      <div class="setting-row"><span class="lbl">🍜 Cuisine</span><span class="val">${a.cuisine || 'Rotate'}</span></div>
+      <div class="setting-row"><span class="lbl">⏰ Push Time</span><span class="val">${pushTime}</span></div>
+      <div class="setting-row"><span class="lbl">🌐 Language</span><span class="val">${user.locale === 'id' ? 'Bahasa Indonesia' : 'English'}</span></div>
+      <div class="setting-row"><span class="lbl">📋 Plans Today</span><span class="val">${user.dailyPlanCount}</span></div>
+      <div class="setting-row"><span class="lbl">📅 Joined</span><span class="val">${new Date(user.createdAt).toLocaleDateString('en', { dateStyle: 'medium' })}</span></div>
+    </div>
+    <p class="hint">💡 Update settings via the Telegram bot</p>
+  `, user));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Profile — referrals + account
+// ────────────────────────────────────────────────────────────────────────────
+app.get('/profile', async (req: Request, res: Response) => {
+  const user = await resolveUser(req);
+  if (!user) { res.redirect('/'); return; }
+
+  const refCount = await pool.query('SELECT COUNT(*)::int FROM referrals WHERE referrer_id = $1', [user.chatId]);
+  const totalRef = refCount.rows[0].count;
+
+  const botUsername = process.env.BOT_USERNAME || 'mealplan_bot';
+  const refLink = `https://t.me/${botUsername}?start=ref_${user.chatId}`;
+
+  res.send(renderPage('Profile', `
+    <div class="profile-head">
+      <div class="avatar">${(user.locale === 'id' ? 'ID' : 'EN')}</div>
+      <div class="profile-info">
+        <div class="profile-name">User #${user.chatId}</div>
+        <div class="profile-tier">${user.tier === 'premium' ? '⭐ Premium' : '🆓 Free'}</div>
+      </div>
+    </div>
+
+    <h3>Referrals</h3>
+    <div class="ref-card">
+      <div class="stat-num">${totalRef}</div>
+      <div class="stat-label">Friends Referred</div>
+      <div class="ref-link-wrap">
+        <input type="text" readonly value="${refLink}" class="ref-link" onclick="this.select()" />
+        <button onclick="navigator.clipboard?.writeText('${refLink}'); this.textContent='✓'">Copy</button>
+      </div>
+    </div>
+
+    <h3>Account</h3>
+    <div class="settings-list">
+      <div class="setting-row"><span class="lbl">💬 Chat ID</span><span class="val">${user.chatId}</span></div>
+      <div class="setting-row"><span class="lbl">📅 Joined</span><span class="val">${new Date(user.createdAt).toLocaleDateString('en', { dateStyle: 'medium' })}</span></div>
+      <div class="setting-row"><span class="lbl">🌐 Language</span><span class="val">${user.locale === 'id' ? 'Bahasa Indonesia' : 'English'}</span></div>
+      ${user.referredBy ? `<div class="setting-row"><span class="lbl">👥 Referred by</span><span class="val">#${user.referredBy}</span></div>` : ''}
+    </div>
+  `, user));
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────────────────
+function escapeHtml(s: string): string {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderMealCards(meals: any): string {
+  if (!Array.isArray(meals)) return '<p class="empty">No meals data</p>';
+  const colors: Record<string, string> = {
+    breakfast: 'oklch(0.72 0.12 60)',
+    lunch: 'oklch(0.70 0.13 145)',
+    dinner: 'oklch(0.55 0.16 280)',
+    snack: 'oklch(0.75 0.08 250)',
+  };
+  return meals.map((m: any) => {
+    const type = (m.type || m.mealType || '').toLowerCase();
+    const color = colors[type] || 'var(--accent)';
+    const title = m.title || m.name || m.meal || 'Meal';
+    const cal = m.calories || m.cal || '';
+    const protein = m.protein || '';
+    const items = m.items || m.foods || m.ingredients || [];
+    const itemsHtml = Array.isArray(items) && items.length
+      ? items.map((i: any) => `<li>${typeof i === 'string' ? escapeHtml(i) : escapeHtml(i.name || i.item || '')}</li>`).join('')
+      : '';
+    return `<div class="meal" style="--meal-c:${color}">
+      <div class="meal-head">
+        <span class="meal-type">${escapeHtml(m.type || m.mealType || 'Meal')}</span>
+        ${cal ? `<span class="meal-cal">${cal} cal</span>` : ''}
+      </div>
+      <div class="meal-title">${escapeHtml(title)}</div>
+      ${itemsHtml ? `<ul class="meal-items">${itemsHtml}</ul>` : ''}
+      ${protein ? `<div class="meal-macro">🥩 ${escapeHtml(protein)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// HTML template — mobile-first, Linear-inspired, reuses dashboard tokens
+// ────────────────────────────────────────────────────────────────────────────
+function renderPage(title: string, body: string, user?: User | null): string {
+  const uid = user?.chatId;
+  const nav = user ? `
+    <nav class="tabbar">
+      <a href="/meals?uid=${uid}" class="${title === 'Meals' ? 'active' : ''}"><span class="icon">🍽️</span><span class="tab-label">Meals</span></a>
+      <a href="/streak?uid=${uid}" class="${title === 'Streak' ? 'active' : ''}"><span class="icon">🔥</span><span class="tab-label">Streak</span></a>
+      <a href="/settings?uid=${uid}" class="${title === 'Settings' ? 'active' : ''}"><span class="icon">⚙️</span><span class="tab-label">Settings</span></a>
+      <a href="/profile?uid=${uid}" class="${title === 'Profile' ? 'active' : ''}"><span class="icon">👤</span><span class="tab-label">Profile</span></a>
+    </nav>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>${title} — MealPlan</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;530;600;700&display=swap" rel="stylesheet">
+  <style>
+    @layer reset, tokens, base, components;
+    @layer reset {
+      * { margin:0; padding:0; box-sizing:border-box; }
+    }
+    @layer tokens {
+      :root {
+        --bg: #0b0c0e;
+        --surface: #0f1011;
+        --surface2: #191a1b;
+        --surface3: #28282c;
+        --fg: #f7f8f8;
+        --fg2: #d0d6e0;
+        --fg3: #8a8f98;
+        --fg4: #62666d;
+        --accent: #5e6ad2;
+        --accent-hi: #7170ff;
+        --accent-soft: color-mix(in oklab, #5e6ad2 12%, transparent);
+        --border: rgba(255,255,255,0.06);
+        --border2: rgba(255,255,255,0.09);
+        --green: #27a644;
+        --red: #e5484d;
+        --radius: 12px;
+        --radius-sm: 8px;
+        --space: clamp(16px, 4vw, 24px);
+        --max-w: 480px;
+        --shadow: 0 0 0 1px var(--border);
+        --shadow-lg: 0 0 0 1px var(--border2), 0 4px 12px rgba(0,0,0,0.3);
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #fbfbfd;
+          --surface: #ffffff;
+          --surface2: #f4f5f7;
+          --surface3: #e8eaed;
+          --fg: #1a1a2e;
+          --fg2: #3c4150;
+          --fg3: #6b7280;
+          --fg4: #9ca3af;
+          --accent-hi: #4a55b8;
+          --accent-soft: color-mix(in oklab, #5e6ad2 8%, transparent);
+          --border: rgba(0,0,0,0.07);
+          --border2: rgba(0,0,0,0.10);
+          --shadow: 0 0 0 1px var(--border);
+          --shadow-lg: 0 0 0 1px var(--border2), 0 4px 16px rgba(0,0,0,0.06);
+        }
+      }
+    }
+    @layer base {
+      body {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 1rem;
+        line-height: 1.5;
+        background: var(--bg);
+        color: var(--fg);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-wrap: pretty;
+        padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+      }
+      h1 { font-size: clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem); font-weight: 600; letter-spacing: -0.02em; margin-bottom: 20px; }
+      h3 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--fg3); margin: 24px 0 12px; }
+      a { color: var(--accent-hi); text-decoration: none; }
+      ::selection { background: var(--accent-soft); }
+      input, select, textarea { font-size: 1rem; font-family: inherit; }
+    }
+    @layer components {
+      .app { max-width: var(--max-w); margin: 0 auto; padding: var(--space); min-height: 100dvh; }
+
+      /* Stats */
+      .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-bottom: 20px; }
+      .stat-card { background: var(--surface); border-radius: var(--radius-sm); padding: 14px; box-shadow: var(--shadow); }
+      .stat-num { font-size: 1.5rem; font-weight: 530; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--fg); }
+      .stat-label { font-size: 11px; color: var(--fg3); margin-top: 2px; }
+
+      /* Date strip */
+      .date-strip { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x mandatory; margin-bottom: 20px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .date-strip::-webkit-scrollbar { display: none; }
+      .date-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 44px; height: 56px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); scroll-snap-align: start; cursor: pointer; transition: background .15s, border-color .15s; }
+      .date-chip.active { background: var(--accent-soft); border-color: var(--accent); }
+      .date-chip .day-name { font-size: 10px; color: var(--fg3); }
+      .date-chip .day-num { font-size: 16px; font-weight: 530; font-variant-numeric: tabular-nums; }
+      .date-chip.active .day-name { color: var(--accent); }
+      .date-chip.active .day-num { color: var(--fg); }
+
+      /* Meals */
+      .meals { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+      .meal { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--meal-c, var(--accent)); border-radius: var(--radius-sm); padding: 14px 16px; transition: transform .15s, border-color .15s; }
+      .meal:active { transform: scale(0.98); }
+      .meal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+      .meal-type { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--meal-c, var(--accent)); }
+      .meal-cal { font-size: 12px; color: var(--fg3); font-variant-numeric: tabular-nums; }
+      .meal-title { font-size: 15px; font-weight: 530; color: var(--fg); margin-bottom: 6px; }
+      .meal-items { list-style: none; padding: 0; margin: 0; }
+      .meal-items li { font-size: 13px; color: var(--fg2); padding: 2px 0; }
+      .meal-items li::before { content: '·'; margin-right: 6px; color: var(--fg4); }
+      .meal-macro { font-size: 12px; color: var(--fg3); margin-top: 6px; }
+
+      /* Plan list */
+      .plan-list { display: flex; flex-direction: column; gap: 8px; }
+      .plan-item { display: flex; justify-content: space-between; align-items: center; background: var(--surface); border-radius: var(--radius-sm); padding: 12px 16px; box-shadow: var(--shadow); transition: transform .15s, background .15s; }
+      .plan-item:active { transform: scale(0.98); }
+      .plan-item:hover { background: var(--surface2); }
+      .plan-name { font-weight: 530; color: var(--fg); font-size: 14px; }
+      .plan-date { font-size: 12px; color: var(--fg3); }
+      .plan-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+      .plan-meta span { font-size: 12px; color: var(--fg3); background: var(--surface); padding: 4px 10px; border-radius: 20px; }
+
+      /* Streak hero */
+      .streak-hero { text-align: center; padding: 32px 0; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 20px; }
+      .streak-num { font-size: clamp(2.5rem, 2rem + 2vw, 3.5rem); font-weight: 600; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; line-height: 1; }
+      .streak-label { font-size: 13px; color: var(--fg3); margin-top: 8px; }
+
+      /* Bars */
+      .bars { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+      .bar-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+      .bar-row:last-child { border-bottom: none; }
+      .bar-row .lbl { color: var(--fg3); font-size: 12px; min-width: 80px; font-variant-numeric: tabular-nums; }
+      .bar-track { flex: 1; height: 6px; background: var(--surface3); border-radius: 3px; overflow: hidden; }
+      .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s cubic-bezier(0.2,0,0,1); }
+      .bar-row .val { font-weight: 530; color: var(--fg); font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
+
+      /* Settings */
+      .settings-list { background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 16px; }
+      .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+      .setting-row:last-child { border-bottom: none; }
+      .setting-row .lbl { color: var(--fg3); }
+      .setting-row .val { color: var(--fg); font-weight: 530; max-width: 60%; text-align: right; }
+      .hint { font-size: 13px; color: var(--fg4); text-align: center; margin-top: 8px; }
+
+      /* Profile */
+      .profile-head { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+      .avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-weight: 600; color: var(--accent); font-size: 18px; }
+      .profile-name { font-weight: 530; font-size: 16px; color: var(--fg); }
+      .profile-tier { font-size: 13px; color: var(--fg3); }
+      .ref-card { background: var(--surface); border-radius: var(--radius); padding: 24px; text-align: center; box-shadow: var(--shadow); margin-bottom: 20px; }
+      .ref-card .stat-num { font-size: 2.5rem; }
+      .ref-link-wrap { display: flex; gap: 8px; margin-top: 16px; }
+      .ref-link { flex: 1; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface2); border: 1px solid var(--border); color: var(--fg2); font-size: 13px; font-family: inherit; }
+      .ref-link:focus { outline: none; border-color: var(--accent); }
+      .ref-link-wrap button { padding: 10px 16px; border-radius: var(--radius-sm); background: var(--accent); color: #fff; border: none; font-size: 13px; font-weight: 530; cursor: pointer; transition: background .15s; }
+      .ref-link-wrap button:hover { background: var(--accent-hi); }
+
+      /* Empty state */
+      .empty { text-align: center; color: var(--fg4); padding: 24px; font-size: 14px; }
+
+      /* Login */
+      .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100dvh; }
+      .login-card { background: var(--surface); border-radius: var(--radius); padding: 40px 32px; box-shadow: var(--shadow-lg); width: 100%; max-width: 360px; text-align: center; }
+      .login-icon { font-size: 2.5rem; margin-bottom: 12px; }
+      .login-sub { color: var(--fg3); font-size: 13px; margin-bottom: 24px; }
+      .login-card input { width: 100%; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface2); border: 1px solid var(--border); color: var(--fg); font-size: 16px; font-family: inherit; margin-bottom: 12px; transition: border-color .15s; }
+      .login-card input:focus { outline: none; border-color: var(--accent); }
+      .login-card button { width: 100%; padding: 12px 16px; border-radius: var(--radius-sm); background: var(--accent); color: #fff; border: none; font-size: 14px; font-weight: 530; font-family: inherit; cursor: pointer; transition: background .15s, transform .12s; }
+      .login-card button:hover { background: var(--accent-hi); }
+      .login-card button:active { transform: scale(0.96); }
+
+      /* Bottom tab bar */
+      .tabbar {
+        position: fixed; bottom: 0; left: 0; right: 0;
+        height: calc(56px + env(safe-area-inset-bottom, 0px));
+        background: color-mix(in oklab, var(--surface) 85%, transparent);
+        backdrop-filter: blur(12px) saturate(140%);
+        -webkit-backdrop-filter: blur(12px) saturate(140%);
+        border-top: 1px solid var(--border);
+        display: flex;
+        z-index: 100;
+        max-width: var(--max-w);
+        margin: 0 auto;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      .tabbar a {
+        flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 2px; font-size: 10px; font-weight: 500; color: var(--fg4);
+        text-decoration: none; transition: color .15s;
+        min-height: 48px;
+      }
+      .tabbar a .icon { font-size: 18px; }
+      .tabbar a.active { color: var(--accent); }
+      .tabbar a:active { transform: scale(0.95); }
+
+      /* Desktop: show tabbar as sidebar */
+      @media (min-width: 768px) {
+        .tabbar {
+          flex-direction: column;
+          top: 0; bottom: 0;
+          left: 0; right: auto;
+          height: 100vh;
+          width: 200px;
+          border-top: none;
+          border-right: 1px solid var(--border);
+          padding: 20px 0;
+          backdrop-filter: none;
+          background: var(--surface);
+        }
+        .tabbar a { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 10px 20px; font-size: 14px; border-left: 2px solid transparent; }
+        .tabbar a .icon { font-size: 16px; width: 20px; }
+        .tabbar a.active { background: var(--accent-soft); border-left-color: var(--accent); }
+        .app { margin-left: 200px; padding: 32px 40px; }
+        body { padding-bottom: 0; }
+      }
+
+      /* Reduced motion */
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>${title}</h1>
+    ${body}
+  </div>
+  ${nav}
+</body>
+</html>`;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Startup
+// ────────────────────────────────────────────────────────────────────────────
+async function main() {
+  await migrateSchema();
+  app.listen(PORT, () => {
+    console.log(`User site running at http://localhost:${PORT}`);
+  });
+}
+
+main().catch((err) => {
+  console.error('User site startup failed:', err);
+  process.exit(1);
+});

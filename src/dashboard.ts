@@ -9,11 +9,24 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'changeme';
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 
+// Parse cookies for auth middleware
+function parseCookies(req: Request): Record<string, string> {
+  const header = req.headers.cookie;
+  if (!header) return {};
+  const out: Record<string, string> = {};
+  for (const pair of header.split(';')) {
+    const [k, ...v] = pair.trim().split('=');
+    if (k) out[k] = decodeURIComponent(v.join('='));
+  }
+  return out;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Auth middleware
 // ────────────────────────────────────────────────────────────────────────────
 function authCheck(req: Request, res: Response, next: any): void {
-  const token = req.cookies?.admin_token || req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const cookies = parseCookies(req);
+  const token = cookies.admin_token || req.query.token || req.headers.authorization?.replace('Bearer ', '');
   if (token === ADMIN_TOKEN) { next(); return; }
   res.redirect('/login');
 }
@@ -23,13 +36,16 @@ function authCheck(req: Request, res: Response, next: any): void {
 // ────────────────────────────────────────────────────────────────────────────
 app.get('/login', (_req: Request, res: Response) => {
   res.send(renderPage('Login', `
-    <div style="max-width:400px;margin:80px auto;text-align:center">
-      <h1>🔐 Admin Login</h1>
-      <form method="POST" action="/login">
-        <input type="password" name="token" placeholder="Admin token"
-          style="width:100%;padding:12px;margin:8px 0;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--foreground)" />
-        <button type="submit" style="padding:12px 24px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer">Login</button>
-      </form>
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-icon">🔐</div>
+        <h1 style="font-size:1.5rem;margin-bottom:4px">Admin Login</h1>
+        <p class="login-sub">Enter your admin token to continue</p>
+        <form method="POST" action="/login">
+          <input type="password" name="token" placeholder="Admin token" autofocus />
+          <button type="submit">Login →</button>
+        </form>
+      </div>
     </div>
   `));
 });
@@ -40,7 +56,7 @@ app.post('/login', (req: Request, res: Response) => {
     res.setHeader('Set-Cookie', `admin_token=${token}; Path=/; HttpOnly; SameSite=Strict`);
     res.redirect('/');
   } else {
-    res.send(renderPage('Login', '<p style="color:red">Invalid token. <a href="/login">Try again</a></p>'));
+    res.send(renderPage('Login', '<p style="color:var(--red);margin-top:12px;font-size:13px">Invalid token. <a href="/login">Try again</a></p>'));
   }
 });
 
@@ -58,8 +74,8 @@ app.get('/', authCheck, async (_req: Request, res: Response) => {
       pool.query('SELECT COUNT(*)::int FROM subscribers'),
       pool.query("SELECT COUNT(*)::int FROM subscribers WHERE subscribed = 1"),
       pool.query("SELECT COUNT(*)::int FROM subscribers WHERE last_pushed = to_char(CURRENT_DATE, 'YYYY-MM-DD')"),
-      pool.query('SELECT COALESCE(AVG(streak),0)::float FROM subscribers'),
-      pool.query('SELECT COALESCE(MAX(streak),0)::int FROM subscribers'),
+      pool.query('SELECT COALESCE(AVG(streak),0)::float AS count FROM subscribers'),
+      pool.query('SELECT COALESCE(MAX(streak),0)::int AS count FROM subscribers'),
       pool.query("SELECT last_feedback, COUNT(*)::int FROM subscribers WHERE last_feedback IS NOT NULL GROUP BY last_feedback"),
       pool.query('SELECT locale, COUNT(*)::int FROM subscribers GROUP BY locale'),
       pool.query('SELECT push_hour, push_min, COUNT(*)::int FROM subscribers WHERE push_hour IS NOT NULL GROUP BY push_hour, push_min ORDER BY push_hour'),
@@ -67,7 +83,7 @@ app.get('/', authCheck, async (_req: Request, res: Response) => {
       pool.query('SELECT COUNT(*)::int FROM plans'),
       pool.query("SELECT tier, COUNT(*)::int FROM subscribers GROUP BY tier"),
       pool.query('SELECT COUNT(*)::int FROM referrals'),
-      pool.query("SELECT COALESCE(SUM(tokens),0)::int FROM usage_log WHERE created >= CURRENT_DATE"),
+      pool.query("SELECT COALESCE(SUM(tokens),0)::int AS count FROM usage_log WHERE created >= CURRENT_DATE"),
     ]);
 
     const stats = {
@@ -102,28 +118,24 @@ app.get('/', authCheck, async (_req: Request, res: Response) => {
       <div class="charts">
         <div class="chart-card">
           <h3>Tier Distribution</h3>
-          <div class="bars">${stats.tiers.map((t: any) => `<div class="bar-row"><span>${t.tier}</span><span>${t.count}</span></div>`).join('')}</div>
+          <div class="bars">${stats.tiers.map((t: any) => `<div class="bar-row"><span class="lbl">${t.tier}</span><span class="val">${t.count}</span></div>`).join('')}</div>
         </div>
         <div class="chart-card">
           <h3>Feedback Ratio</h3>
-          ${stats.feedback.length ? `<div class="bars">${stats.feedback.map((f: any) => `<div class="bar-row"><span>${f.last_feedback}</span><span>${f.count}</span></div>`).join('')}</div>` : '<p>No feedback yet</p>'}
+          ${stats.feedback.length ? `<div class="bars">${stats.feedback.map((f: any) => `<div class="bar-row"><span class="lbl">${f.last_feedback}</span><span class="val">${f.count}</span></div>`).join('')}</div>` : '<p style="color:var(--fg4)">No feedback yet</p>'}
         </div>
         <div class="chart-card">
           <h3>Locale Distribution</h3>
-          <div class="bars">${stats.locale.map((l: any) => `<div class="bar-row"><span>${l.locale}</span><span>${l.count}</span></div>`).join('')}</div>
+          <div class="bars">${stats.locale.map((l: any) => `<div class="bar-row"><span class="lbl">${l.locale}</span><span class="val">${l.count}</span></div>`).join('')}</div>
         </div>
         <div class="chart-card">
           <h3>Push Time Distribution</h3>
-          ${stats.pushDist.length ? `<div class="bars">${stats.pushDist.map((p: any) => `<div class="bar-row"><span>${String(p.push_hour).padStart(2,'0')}:${String(p.push_min).padStart(2,'0')}</span><span>${p.count}</span></div>`).join('')}</div>` : '<p>No custom push times set</p>'}
+          ${stats.pushDist.length ? `<div class="bars">${stats.pushDist.map((p: any) => `<div class="bar-row"><span class="lbl">${String(p.push_hour).padStart(2,'0')}:${String(p.push_min).padStart(2,'0')}</span><span class="val">${p.count}</span></div>`).join('')}</div>` : '<p style="color:var(--fg4)">No custom push times set</p>'}
         </div>
-      </div>
-
-      <div class="nav-links">
-        <a href="/users">👥 Users</a> · <a href="/plans">📋 Plans</a> · <a href="/feedback">👍 Feedback</a> · <a href="/usage">📊 Usage</a> · <a href="/referrals">🔗 Referrals</a> · <a href="/logout">🚪 Logout</a>
       </div>
     `));
   } catch (err) {
-    res.send(renderPage('Error', `<p style="color:red">${(err as Error).message}</p>`));
+    res.send(renderPage('Error', `<p style="color:var(--red);padding:20px;background:var(--surface);border-radius:8px;box-shadow:var(--shadow)">${(err as Error).message}</p>`));
   }
 });
 
@@ -154,14 +166,13 @@ app.get('/users', authCheck, async (req: Request, res: Response) => {
   `).join('');
 
   res.send(renderPage('Users', `
-    <table><thead><tr><th>Chat ID</th><th>Locale</th><th>Subscribed</th><th>Streak</th><th>Last Pushed</th><th>Push Time</th><th>Feedback</th></tr></thead>
-    <tbody>${rows}</tbody></table>
+    <div class="table-wrap"><table><thead><tr><th>Chat ID</th><th>Locale</th><th>Subscribed</th><th>Streak</th><th>Last Pushed</th><th>Push Time</th><th>Feedback</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
     <div class="pagination">
       ${page > 1 ? `<a href="/users?page=${page-1}">← Prev</a>` : ''}
       <span>Page ${page} of ${totalPages}</span>
       ${page < totalPages ? `<a href="/users?page=${page+1}">Next →</a>` : ''}
     </div>
-    <div class="nav-links"><a href="/">← Back to Dashboard</a></div>
   `));
 });
 
@@ -189,9 +200,8 @@ app.get('/plans', authCheck, async (_req: Request, res: Response) => {
   `).join('');
 
   res.send(renderPage('Saved Plans', `
-    <table><thead><tr><th>ID</th><th>Chat ID</th><th>Name</th><th>Locale</th><th>Created</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="5" style="text-align:center">No saved plans</td></tr>'}</tbody></table>
-    <div class="nav-links"><a href="/">← Back to Dashboard</a></div>
+    <div class="table-wrap"><table><thead><tr><th>ID</th><th>Chat ID</th><th>Name</th><th>Locale</th><th>Created</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" class="empty-row">No saved plans</td></tr>'}</tbody></table></div>
   `));
 });
 
@@ -227,9 +237,8 @@ app.get('/feedback', authCheck, async (_req: Request, res: Response) => {
       <div class="stat-card"><div class="stat-num">${bad}</div><div class="stat-label">👎 Bad</div></div>
       <div class="stat-card"><div class="stat-num">${ratio}%</div><div class="stat-label">Good Ratio</div></div>
     </div>
-    <table><thead><tr><th>Chat ID</th><th>Locale</th><th>Feedback</th><th>Streak</th><th>Last Pushed</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="5" style="text-align:center">No feedback yet</td></tr>'}</tbody></table>
-    <div class="nav-links"><a href="/">← Back to Dashboard</a></div>
+    <div class="table-wrap"><table><thead><tr><th>Chat ID</th><th>Locale</th><th>Feedback</th><th>Streak</th><th>Last Pushed</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" class="empty-row">No feedback yet</td></tr>'}</tbody></table></div>
   `));
 });
 
@@ -261,9 +270,8 @@ app.get('/usage', authCheck, async (_req: Request, res: Response) => {
     <div class="stats-grid">
       <div class="stat-card"><div class="stat-num">${totalTokens}</div><div class="stat-label">Total Tokens (200 rows)</div></div>
     </div>
-    <table><thead><tr><th>Chat ID</th><th>Tier</th><th>Feature</th><th>Tokens</th><th>Created</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="5" style="text-align:center">No usage yet</td></tr>'}</tbody></table>
-    <div class="nav-links"><a href="/">← Back to Dashboard</a></div>
+    <div class="table-wrap"><table><thead><tr><th>Chat ID</th><th>Tier</th><th>Feature</th><th>Tokens</th><th>Created</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" class="empty-row">No usage yet</td></tr>'}</tbody></table></div>
   `));
 });
 
@@ -291,9 +299,8 @@ app.get('/referrals', authCheck, async (_req: Request, res: Response) => {
   `).join('');
 
   res.send(renderPage('Referrals', `
-    <table><thead><tr><th>Referred Chat ID</th><th>Locale</th><th>Their Referrals</th><th>Joined</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="4" style="text-align:center">No referrals yet</td></tr>'}</tbody></table>
-    <div class="nav-links"><a href="/">← Back to Dashboard</a></div>
+    <div class="table-wrap"><table><thead><tr><th>Referred Chat ID</th><th>Locale</th><th>Their Referrals</th><th>Joined</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="4" class="empty-row">No referrals yet</td></tr>'}</tbody></table></div>
   `));
 });
 
@@ -319,34 +326,172 @@ function renderPage(title: string, body: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="refresh" content="60">
   <title>${title} — Meal Plan Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#1a1a2e; --card:#16213e; --fg:#e0e0e0; --muted:#8892b0; --accent:#0f3460; --border:#233; --accent2:#e94560; }
+    /* ── Dark theme (default) — Linear-inspired ── */
+    :root {
+      --bg: #08090a;
+      --surface: #0f1011;
+      --surface2: #191a1b;
+      --surface3: #28282c;
+      --fg: #f7f8f8;
+      --fg2: #d0d6e0;
+      --fg3: #8a8f98;
+      --fg4: #62666d;
+      --accent: #5e6ad2;
+      --accent-hi: #7170ff;
+      --accent-soft: rgba(94,106,210,0.12);
+      --border: rgba(255,255,255,0.06);
+      --border2: rgba(255,255,255,0.09);
+      --green: #27a644;
+      --red: #e5484d;
+      --shadow: 0 0 0 1px var(--border);
+      --shadow-lg: 0 0 0 1px var(--border2), 0 4px 12px rgba(0,0,0,0.3);
+      --radius: 8px;
+      --radius-sm: 6px;
+      --radius-lg: 12px;
+    }
+    /* ── Light theme (auto) ── */
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #fbfbfd;
+        --surface: #ffffff;
+        --surface2: #f4f5f7;
+        --surface3: #e8eaed;
+        --fg: #1a1a2e;
+        --fg2: #3c4150;
+        --fg3: #6b7280;
+        --fg4: #9ca3af;
+        --accent: #5e6ad2;
+        --accent-hi: #4a55b8;
+        --accent-soft: rgba(94,106,210,0.08);
+        --border: rgba(0,0,0,0.07);
+        --border2: rgba(0,0,0,0.10);
+        --shadow: 0 0 0 1px var(--border);
+        --shadow-lg: 0 0 0 1px var(--border2), 0 4px 16px rgba(0,0,0,0.06);
+      }
+    }
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--fg); padding:20px; }
-    h1 { font-size:1.8rem; margin-bottom:20px; }
-    h3 { font-size:1rem; margin-bottom:12px; color:var(--muted); }
-    .stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:16px; margin-bottom:32px; }
-    .stat-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; text-align:center; }
-    .stat-num { font-size:2rem; font-weight:700; color:var(--accent2); }
-    .stat-label { font-size:0.8rem; color:var(--muted); margin-top:4px; }
-    .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; margin-bottom:32px; }
-    .chart-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
-    .bars { display:flex; flex-direction:column; gap:8px; }
-    .bar-row { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--border); }
-    table { width:100%; border-collapse:collapse; margin-bottom:20px; }
-    th,td { padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); }
-    th { color:var(--muted); font-size:0.85rem; text-transform:uppercase; }
-    tbody tr:hover { background:var(--card); }
-    .nav-links { margin:20px 0; font-size:0.95rem; }
-    .nav-links a { color:var(--accent2); text-decoration:none; }
-    .nav-links a:hover { text-decoration:underline; }
-    .pagination { display:flex; gap:16px; align-items:center; justify-content:center; margin:16px 0; }
-    .pagination a { color:var(--accent2); text-decoration:none; }
+    body {
+      font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      font-size:14px; line-height:1.5;
+      background:var(--bg); color:var(--fg);
+      padding:0;
+      -webkit-font-smoothing:antialiased;
+    }
+    /* ── Layout shell ── */
+    .shell { display:flex; min-height:100vh; }
+    .sidebar {
+      width:220px; flex-shrink:0;
+      background:var(--surface); border-right:1px solid var(--border);
+      padding:20px 0; position:fixed; height:100vh; overflow-y:auto;
+      display:flex; flex-direction:column;
+    }
+    .sidebar-brand { padding:0 20px 24px; font-size:15px; font-weight:600; letter-spacing:-0.01em; color:var(--fg); }
+    .sidebar-brand span { color:var(--accent); }
+    .nav { flex:1; }
+    .nav a {
+      display:flex; align-items:center; gap:10px;
+      padding:7px 20px; font-size:13px; font-weight:500;
+      color:var(--fg3); text-decoration:none; border-left:2px solid transparent;
+      transition:color .15s, background .15s;
+    }
+    .nav a:hover { color:var(--fg2); background:var(--surface2); }
+    .nav a.active { color:var(--fg); background:var(--accent-soft); border-left-color:var(--accent); }
+    .nav a .icon { font-size:15px; width:20px; text-align:center; }
+    .main { flex:1; margin-left:220px; padding:32px 40px; max-width:1200px; }
+    /* ── Headings ── */
+    h1 { font-size:1.5rem; font-weight:600; letter-spacing:-0.02em; margin-bottom:24px; }
+    h3 { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--fg3); margin-bottom:14px; }
+    /* ── Stats grid ── */
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:28px; }
+    .stat-card {
+      background:var(--surface); border-radius:var(--radius); padding:18px 20px;
+      box-shadow:var(--shadow); transition:box-shadow .2s;
+    }
+    .stat-card:hover { box-shadow:var(--shadow-lg); }
+    .stat-num { font-size:1.75rem; font-weight:600; letter-spacing:-0.03em; color:var(--fg); }
+    .stat-label { font-size:12px; color:var(--fg3); margin-top:2px; }
+    /* ── Chart cards ── */
+    .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin-bottom:28px; }
+    .chart-card { background:var(--surface); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); }
+    .bars { display:flex; flex-direction:column; gap:6px; }
+    .bar-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+    .bar-row:last-child { border-bottom:none; }
+    .bar-row .val { font-weight:600; color:var(--fg); }
+    .bar-row .lbl { color:var(--fg3); text-transform:capitalize; }
+    /* ── Tables ── */
+    .table-wrap { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; margin-bottom:20px; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:10px 16px; text-align:left; }
+    th { font-size:12px; font-weight:500; text-transform:uppercase; letter-spacing:0.04em; color:var(--fg3); border-bottom:1px solid var(--border); background:var(--surface2); }
+    td { font-size:13px; color:var(--fg2); border-bottom:1px solid var(--border); }
+    tbody tr:last-child td { border-bottom:none; }
+    tbody tr:hover { background:var(--surface2); }
+    .empty-row { text-align:center; color:var(--fg4); padding:24px; }
+    /* ── Pagination ── */
+    .pagination { display:flex; gap:12px; align-items:center; justify-content:center; margin:16px 0; font-size:13px; }
+    .pagination a { color:var(--accent-hi); text-decoration:none; padding:6px 12px; border-radius:var(--radius-sm); }
+    .pagination a:hover { background:var(--accent-soft); }
+    .pagination span { color:var(--fg3); }
+    /* ── Back link ── */
+    .back-link { margin:20px 0; font-size:13px; }
+    .back-link a { color:var(--fg3); text-decoration:none; }
+    .back-link a:hover { color:var(--fg2); }
+    /* ── Login ── */
+    .login-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .login-card {
+      background:var(--surface); border-radius:var(--radius-lg); padding:40px;
+      box-shadow:var(--shadow-lg); width:380px; text-align:center;
+    }
+    .login-icon { font-size:2.5rem; margin-bottom:12px; }
+    .login-sub { color:var(--fg3); font-size:13px; margin-bottom:24px; }
+    .login-card input {
+      width:100%; padding:10px 14px; border-radius:var(--radius-sm);
+      background:var(--surface2); border:1px solid var(--border);
+      color:var(--fg); font-size:14px; font-family:inherit; margin-bottom:12px;
+      transition:border-color .15s;
+    }
+    .login-card input:focus { outline:none; border-color:var(--accent); }
+    .login-card button {
+      width:100%; padding:10px 16px; border-radius:var(--radius-sm);
+      background:var(--accent); color:#fff; border:none; font-size:14px;
+      font-weight:500; font-family:inherit; cursor:pointer; transition:background .15s;
+    }
+    .login-card button:hover { background:var(--accent-hi); }
+    /* ── Misc ── */
+    .nav-old { display:none; }
+    a { color:var(--accent-hi); }
+    ::selection { background:var(--accent-soft); }
+    @media (max-width:768px) {
+      .sidebar { display:none; }
+      .main { margin-left:0; padding:20px; }
+    }
   </style>
 </head>
 <body>
-  <h1>📊 ${title}</h1>
-  ${body}
+  <div class="shell">
+    <nav class="sidebar">
+      <div class="sidebar-brand">🍱 Meal<span>Plan</span></div>
+      <div class="nav">
+        <a href="/" class="${title === 'Dashboard' ? 'active' : ''}"><span class="icon">📊</span> Dashboard</a>
+        <a href="/users" class="${title === 'Users' ? 'active' : ''}"><span class="icon">👥</span> Users</a>
+        <a href="/plans" class="${title === 'Saved Plans' ? 'active' : ''}"><span class="icon">📋</span> Plans</a>
+        <a href="/feedback" class="${title === 'Feedback' ? 'active' : ''}"><span class="icon">👍</span> Feedback</a>
+        <a href="/usage" class="${title === 'Usage' ? 'active' : ''}"><span class="icon">📈</span> Usage</a>
+        <a href="/referrals" class="${title === 'Referrals' ? 'active' : ''}"><span class="icon">🔗</span> Referrals</a>
+      </div>
+      <div class="nav" style="margin-top:auto">
+        <a href="/logout"><span class="icon">🚪</span> Logout</a>
+      </div>
+    </nav>
+    <main class="main">
+      <h1>${title}</h1>
+      ${body}
+      <div class="back-link"><a href="/">← Dashboard</a></div>
+    </main>
+  </div>
 </body>
 </html>`;
 }
