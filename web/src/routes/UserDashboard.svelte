@@ -4,7 +4,6 @@
   import { theme } from '$lib/stores/theme.svelte';
   import UserLayout from '$lib/components/UserLayout.svelte';
   import Button from '$lib/components/Button.svelte';
-  import StatCard from '$lib/components/StatCard.svelte';
   import Alert from '$lib/components/Alert.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import MealPlanView from '$lib/components/MealPlanView.svelte';
@@ -131,6 +130,123 @@
     if (plan.feedback === 'dislike' || plan.rating <= 2) return '👎';
     return '·';
   }
+
+  // ── Plate helpers ──
+
+  interface Meal {
+    name: string;
+    body: string;
+    macros?: string;
+    start: number;
+    end: number;
+  }
+
+  // Parse meals from plan text (same logic as MealPlanView, kept here for plate segments)
+  function parseMeals(text: string): Meal[] {
+    if (!text) return [];
+    const mealRegex = /(?:^|\n)(?:🍳|🍱|🌙|☀️|🌅|🥗|🍲)?\s*((?:Sarapan|Breakfast|Makan\s+siang|Lunch|Makan\s+malam|Dinner|Snack|Camilan|Brunch))[^\n]*/gi;
+    const splits: { name: string; start: number }[] = [];
+    let match;
+    while ((match = mealRegex.exec(text)) !== null) {
+      splits.push({ name: match[1].trim(), start: match.index });
+    }
+    if (splits.length === 0) return [];
+    const result: Meal[] = [];
+    for (let i = 0; i < splits.length; i++) {
+      const start = splits[i].start;
+      const end = i + 1 < splits.length ? splits[i + 1].start : text.length;
+      const chunk = text.slice(start, end).trim();
+      const macroMatch = chunk.match(/(~?\d+\s*(?:kal|kcal|kkal|cal).*?protein.*?\d+\s*g)/i);
+      const macros = macroMatch ? macroMatch[1] : '';
+      const body = chunk.replace(mealRegex, '').trim();
+      result.push({ name: splits[i].name, body: body || chunk, macros, start, end });
+    }
+    return result;
+  }
+
+  // Determine plate position: morning=top, lunch=right, dinner=bottom, snack=left
+  function mealPosition(name: string): { angle: number; label: string } {
+    const key = name.toLowerCase();
+    if (key.includes('sarapan') || key.includes('breakfast') || key.includes('brunch'))
+      return { angle: 0, label: '07:00' }; // top
+    if (key.includes('siang') || key.includes('lunch'))
+      return { angle: 90, label: '12:00' }; // right
+    if (key.includes('malam') || key.includes('dinner'))
+      return { angle: 180, label: '18:00' }; // bottom
+    return { angle: 270, label: '15:00' }; // left (snack/camilan)
+  }
+
+  // Segment color from tokens — rotate through warm palette
+  function mealColor(idx: number): string {
+    const colors = [
+      'var(--leaf-500)',   // green
+      'var(--amber-500)',  // amber
+      'var(--cream-200)',  // cream
+      'var(--leaf-400)',   // light green
+      'var(--amber-400)',  // light amber
+      'var(--cream-100)',  // light cream
+    ];
+    return colors[idx % colors.length];
+  }
+
+  // Extract kcal + protein from macros string
+  function macrosOf(meal: Meal): { kcal: number; protein: number } {
+    const m = meal.macros || '';
+    const kcalMatch = m.match(/~?(\d+)\s*(?:kal|kcal|kkal|cal)/i);
+    const proteinMatch = m.match(/protein\s*~?(\d+)\s*g/i);
+    return {
+      kcal: kcalMatch ? parseInt(kcalMatch[1], 10) : 0,
+      protein: proteinMatch ? parseInt(proteinMatch[1], 10) : 0,
+    };
+  }
+
+  // Parsed meals for plate + derived totals
+  let meals = $derived(parseMeals(lastPlan?.planText || ''));
+  let totals = $derived(
+    meals.reduce(
+      (acc, meal) => {
+        const m = macrosOf(meal);
+        acc.kcal += m.kcal;
+        acc.protein += m.protein;
+        return acc;
+      },
+      { kcal: 0, protein: 0 },
+    ),
+  );
+
+  // Selected segment for detail view
+  let selectedMealIdx = $state<number | null>(null);
+
+  // Build conic-gradient string for plate segments
+  let plateGradient = $derived.by(() => {
+    if (meals.length === 0) return 'var(--surface-2)';
+    // Build sorted segments by angle, then create gradient stops
+    const segments = meals.map((m, i) => ({ ...mealPosition(m.name), idx: i, color: mealColor(i) }));
+    segments.sort((a, b) => a.angle - b.angle);
+    const slice = 360 / segments.length;
+    const stops: string[] = [];
+    segments.forEach((seg, i) => {
+      const start = seg.angle - slice / 2;
+      const end = seg.angle + slice / 2;
+      const sStart = ((start % 360) + 360) % 360;
+      const sEnd = ((end % 360) + 360) % 360;
+      // Handle wrap for first/last segment
+      if (i === 0 && sStart > sEnd) {
+        // Split at 0
+        stops.push(`${seg.color} ${sStart}deg 360deg`);
+        stops.push(`${seg.color} 0deg ${sEnd}deg`);
+      } else {
+        stops.push(`${seg.color} ${sStart}deg ${sEnd}deg`);
+      }
+    });
+    return `conic-gradient(from -${slice / 2}deg, ${stops.join(', ')})`;
+  });
+
+  // Convert angle to label position (polar to cartesian for time labels)
+  function labelPos(angle: number, radius: number): { x: number; y: number } {
+    const rad = (angle - 90) * (Math.PI / 180);
+    return { x: 50 + radius * Math.cos(rad), y: 50 + radius * Math.sin(rad) };
+  }
 </script>
 
 <UserLayout current="#/dashboard">
@@ -159,47 +275,106 @@
       </Button>
     </div>
 
-    <!-- ═══ Quick Stats Row ═══ -->
-    <div class="stats-grid">
-      <StatCard value={profile.meals_per_day || 3} label="Makan/hari" />
-      <StatCard
-        value={profile.cuisine_rotation === 'rotate' ? 'Rotasi' : profile.cuisine_rotation || '—'}
-        label="Masakan" />
-      <StatCard
-        value={profile.streak_days || 0}
-        label="Streak"
-        highlight={(profile.streak_days || 0) > 0} />
-      <StatCard
-        value={profile.budget_tier || '—'}
-        label="Budget" />
-      {#if profile.referral_count}
-        <StatCard value={profile.referral_count} label="Referral" />
-      {/if}
-    </div>
+    <!-- ═══ Plate Section ═══ -->
+    {#if lastPlan && meals.length > 0}
+      <section class="plate-section">
+        <!-- Streak bar above plate -->
+        {#if (profile.streak_days || 0) > 0}
+          <div class="streak-bar" style="--streak-pct: {Math.min((profile.streak_days / 7) * 100, 100)}%">
+            <span class="streak-bar-label">🔥 {profile.streak_days} hari beruntun</span>
+            <div class="streak-bar-fill"></div>
+          </div>
+        {/if}
 
-    <!-- ═══ Today's Plan ═══ -->
-    {#if lastPlan}
-      <section class="plan-section">
-        <div class="cuisine-header">
-          <div class="cuisine-left">
-            <span class="cuisine-emoji">{cuisineEmoji(lastPlan.cuisine)}</span>
-            <div>
-              <span class="cuisine-label">Hari Ini</span>
-              <h2 class="cuisine-name">{lastPlan.cuisine || 'Rencana Harian'}</h2>
+        <div class="plate-wrap">
+          <!-- Time labels positioned around plate -->
+          {#each [{ a: 0, l: '07:00' }, { a: 90, l: '12:00' }, { a: 180, l: '18:00' }, { a: 270, l: '15:00' }] as tl}
+            {@const pos = labelPos(tl.a, 42)}
+            <span class="time-label" style="left: {pos.x}%; top: {pos.y}%;">{tl.l}</span>
+          {/each}
+
+          <!-- Plate itself -->
+          <div class="plate" style="background: {plateGradient};">
+            <!-- Inner circle = plate well -->
+            <div class="plate-inner">
+              {#each meals as meal, i (meal.name + i)}
+                {@const pos = mealPosition(meal.name)}
+                {@const lp = labelPos(pos.angle, 28)}
+                <button
+                  class="segment-label"
+                  class:active={selectedMealIdx === i}
+                  style="left: {lp.x}%; top: {lp.y}%; --seg-color: {mealColor(i)};"
+                  onclick={() => selectedMealIdx = selectedMealIdx === i ? null : i}
+                  aria-label="Lihat {meal.name}"
+                >
+                  <span class="seg-emoji">{meal.name.match(/Sarapan|Breakfast/) ? '🍳' : meal.name.match(/siang|Lunch/) ? '🍱' : meal.name.match(/malam|Dinner/) ? '🍲' : '🥗'}</span>
+                  <span class="seg-name">{meal.name}</span>
+                </button>
+              {/each}
             </div>
           </div>
-          <span class="plan-date">{isToday(lastPlan.created) ? 'Baru saja' : fmtDate(lastPlan.created)}</span>
         </div>
-        <div class="plan-body">
-          <MealPlanView bind:planText={lastPlan.planText} />
+
+        <!-- Summary line -->
+        <div class="summary-line">
+          <span class="summary-item">{meals.length} meals</span>
+          <span class="summary-sep">·</span>
+          <span class="summary-item summary-kcal">{totals.kcal || extractCalories(lastPlan.planText)} cal</span>
+          <span class="summary-sep">·</span>
+          <span class="summary-item summary-protein">{totals.protein}g protein</span>
+          <span class="summary-sep">·</span>
+          <span class="summary-item summary-streak">Day {profile.streak_days || 0}</span>
         </div>
       </section>
 
-      <div class="plan-actions">
-        <Button variant="secondary" loading={cookingLoading} onclick={getCookingSteps}>
-          🍳 {cookingSteps ? 'Panduan Masak Ulang' : 'Panduan Masak'}
-        </Button>
-      </div>
+      <!-- ═══ Meal Details (selected or all) ═══ -->
+      <section class="meal-details">
+        {#if selectedMealIdx !== null && meals[selectedMealIdx]}
+          <div class="detail-header">
+            <button class="detail-back" onclick={() => selectedMealIdx = null}>← Semua</button>
+            <span class="detail-cuisine">{cuisineEmoji(lastPlan.cuisine)} {lastPlan.cuisine || 'Rencana'}</span>
+            <span class="detail-date">{isToday(lastPlan.created) ? 'Baru saja' : fmtDate(lastPlan.created)}</span>
+          </div>
+          <div class="detail-body">
+            {#if meals[selectedMealIdx]}
+              {@const meal = meals[selectedMealIdx]}
+              {@const m = macrosOf(meal)}
+            <h3 class="detail-meal-name">{meal.name}</h3>
+            {#if m.kcal > 0 || m.protein > 0}
+              <div class="detail-macros">
+                {#if m.kcal > 0}<span class="dm-kcal">{m.kcal} kal</span>{/if}
+                {#if m.protein > 0}<span class="dm-protein">{m.protein}g protein</span>{/if}
+              </div>
+            {/if}
+            <pre class="detail-text">{meal.body}</pre>
+            {/if}
+          </div>
+          <div class="plan-actions">
+            <Button variant="secondary" loading={cookingLoading} onclick={getCookingSteps}>
+              🍳 {cookingSteps ? 'Panduan Masak Ulang' : 'Panduan Masak'}
+            </Button>
+          </div>
+        {:else}
+          <div class="detail-header">
+            <div class="detail-cuisine">
+              <span class="cuisine-emoji">{cuisineEmoji(lastPlan.cuisine)}</span>
+              <div>
+                <span class="cuisine-label">Hari Ini</span>
+                <h2 class="cuisine-name">{lastPlan.cuisine || 'Rencana Harian'}</h2>
+              </div>
+            </div>
+            <span class="detail-date">{isToday(lastPlan.created) ? 'Baru saja' : fmtDate(lastPlan.created)}</span>
+          </div>
+          <div class="plan-body">
+            <MealPlanView bind:planText={lastPlan.planText} />
+          </div>
+          <div class="plan-actions">
+            <Button variant="secondary" loading={cookingLoading} onclick={getCookingSteps}>
+              🍳 {cookingSteps ? 'Panduan Masak Ulang' : 'Panduan Masak'}
+            </Button>
+          </div>
+        {/if}
+      </section>
     {:else if !generating}
       <section class="empty-plan">
         <div class="empty-illustration">
@@ -211,7 +386,7 @@
         </div>
         <h2>Dapur masih kosong!</h2>
         <p class="empty-text">
-          Belum ada rencana makan. Bayarkan saja sekali klik —
+          Belum ada rencana makan. Bayangkan saja satu kali klik —
           nasi merah, ayam bakar, sayur asem, tempe orek,
           ikan kembung, kangkung... semua siap diatur.
         </p>
@@ -238,7 +413,7 @@
     <!-- ═══ Recent Activity ═══ -->
     {#if recentPlans.length > 1}
       <section class="recent-section">
-        <h3 class="section-title">📋 Rencana Terakhir</h3>
+        <h3 class="section-title">Rencana Terakhir</h3>
         <div class="recent-list">
           {#each recentPlans as plan, i}
             <div class="recent-row" class:first={i === 0}>
@@ -309,23 +484,167 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── Stats Grid ── */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: var(--space-3);
-    margin-bottom: var(--space-6);
+  /* ── Plate Section ── */
+  .plate-section {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-elevation-1);
+    overflow: hidden;
+    margin-bottom: var(--space-4);
+    padding: var(--space-6) var(--space-5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-5);
   }
 
-  /* ── Plan Section ── */
-  .plan-section {
+  /* Streak bar — thin amber gradient above plate */
+  .streak-bar {
+    width: 100%;
+    max-width: 280px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+  }
+  .streak-bar-label {
+    font-size: var(--fs-xs);
+    color: var(--accent);
+    font-weight: var(--fw-medium);
+    font-variant-numeric: tabular-nums;
+  }
+  .streak-bar-fill {
+    width: 100%;
+    height: 4px;
+    background: var(--surface-3);
+    border-radius: var(--radius-pill);
+    position: relative;
+    overflow: hidden;
+  }
+  .streak-bar-fill::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 0;
+    width: var(--streak-pct, 50%);
+    height: 100%;
+    background: linear-gradient(90deg, var(--amber-600), var(--amber-400));
+    border-radius: var(--radius-pill);
+  }
+
+  /* Plate wrap — holds plate + labels */
+  .plate-wrap {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  @media (min-width: 480px) {
+    .plate-wrap { width: 320px; height: 320px; }
+  }
+
+  /* Time labels around plate */
+  .time-label {
+    position: absolute;
+    font-size: var(--fs-xs);
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+  }
+
+  /* The plate — circular conic-gradient */
+  .plate {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: relative;
+    box-shadow:
+      0 0 0 4px var(--surface-2),
+      0 8px 24px rgba(0,0,0,0.3);
+    transition: filter var(--duration-small) var(--ease-standard);
+  }
+  .plate:hover {
+    filter: brightness(1.05);
+  }
+
+  /* Inner well of plate */
+  .plate-inner {
+    position: absolute;
+    inset: 18%;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: inset 0 0 0 2px var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Segment labels — clickable meal markers inside plate */
+  .segment-label {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    transform: translate(-50%, -50%);
+    background: var(--surface-2);
+    border: 2px solid var(--seg-color, var(--border-strong));
+    border-radius: var(--radius-pill);
+    padding: var(--space-1) var(--space-2);
+    cursor: pointer;
+    transition: all var(--duration-micro) var(--ease-standard);
+    font-family: inherit;
+    z-index: 2;
+  }
+  .segment-label:hover {
+    background: var(--surface-3);
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  .segment-label.active {
+    background: var(--seg-color);
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  .seg-emoji {
+    font-size: var(--fs-md);
+    line-height: 1;
+  }
+  .seg-name {
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+    color: var(--text);
+    text-transform: capitalize;
+    white-space: nowrap;
+  }
+
+  /* Summary line — single row, mono tabular-nums */
+  .summary-line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .summary-sep { color: var(--text-faint); }
+  .summary-kcal { color: var(--primary); font-weight: var(--fw-medium); }
+  .summary-protein { color: var(--accent); font-weight: var(--fw-medium); }
+  .summary-streak { color: var(--text-subtle); }
+
+  /* ── Meal Details ── */
+  .meal-details {
     background: var(--surface);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-elevation-1);
     overflow: hidden;
     margin-bottom: var(--space-4);
   }
-  .cuisine-header {
+  .detail-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -333,8 +652,27 @@
     background: var(--surface-2);
     border-bottom: 1px solid var(--border);
     gap: var(--space-3);
+    flex-wrap: wrap;
   }
-  .cuisine-left { display: flex; align-items: center; gap: var(--space-3); }
+  .detail-back {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-medium);
+    cursor: pointer;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    transition: background var(--duration-micro) var(--ease-standard);
+  }
+  .detail-back:hover { background: var(--primary-soft); }
+  .detail-cuisine {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1;
+  }
   .cuisine-emoji { font-size: var(--fs-2xl); line-height: 1; }
   .cuisine-label {
     display: block;
@@ -351,10 +689,50 @@
     letter-spacing: var(--ls-snug);
     line-height: 1.2;
   }
-  .plan-date {
+  .detail-date {
     font-size: var(--fs-xs);
     color: var(--text-faint);
     white-space: nowrap;
+  }
+  .detail-body { padding: var(--space-5); }
+  .detail-meal-name {
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-semibold);
+    color: var(--primary);
+    text-transform: capitalize;
+    margin-bottom: var(--space-2);
+  }
+  .detail-macros {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .dm-kcal {
+    background: var(--primary-soft);
+    color: var(--primary);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-pill);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+  .dm-protein {
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-pill);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+    font-variant-numeric: tabular-nums;
+  }
+  .detail-text {
+    font-family: var(--font-sans);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-relaxed);
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    margin: 0;
   }
   .plan-body { padding: 0; }
   .plan-actions {
@@ -362,6 +740,7 @@
     gap: var(--space-2);
     margin-bottom: var(--space-6);
     flex-wrap: wrap;
+    padding: 0 var(--space-5) var(--space-4);
   }
 
   /* ── Empty State ── */
@@ -518,7 +897,13 @@
   /* ── Mobile ── */
   @media (max-width: 768px) {
     .welcome-bar { flex-direction: column; align-items: stretch; }
-    .cuisine-header { flex-direction: column; align-items: flex-start; }
+    .detail-header { flex-direction: column; align-items: flex-start; }
     .recent-row { flex-wrap: wrap; }
+    .plate-wrap { width: 240px; height: 240px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .segment-label, .plate { transition: none; }
+    .segment-label:hover { transform: translate(-50%, -50%); }
   }
 </style>

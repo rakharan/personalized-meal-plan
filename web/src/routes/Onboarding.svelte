@@ -5,50 +5,57 @@
 
   onMount(() => theme.init());
 
-  let step = $state(0);
-
-  const steps = [
+  // Scroll-driven progressive disclosure — sections reveal as user scrolls
+  const sections = [
     {
       icon: '🍽️',
       title: 'Halo! Aku Saji',
       desc: 'Aku bakal bantu kamu makan enak + sehat setiap hari. Bahan-bahan yang aku pilih gampang cari di Indonesia — tempe, kangkung, ikan kembung, dan lainnya.',
-      cta: 'Lanjut',
-      accent: 'primary',
     },
     {
       icon: '🎯',
       title: 'Cerita goal kamu',
       desc: 'Mau turun berat badan? Naik mass otot? Atau makan sehat aja? Nanti di bot, kamu jawab beberapa pertanyaan dan aku sesuaikan rencana makan kamu.',
-      cta: 'Lanjut',
-      accent: 'amber',
     },
     {
       icon: '🥘',
       title: 'Masakan favorit?',
       desc: 'Indonesia, Jepang, Korea, Mediterania — atau putar tiap hari biar nggak bosen? Kamu pilih di bot nanti, aku masak (secara digital).',
-      cta: 'Lanjut',
-      accent: 'primary',
     },
     {
       icon: '🔥',
       title: 'Lanjut ke bot!',
       desc: 'Kamu bakal dibawa ke Telegram buat jawab pertanyaan singkat (goal, alergi, kalori, masakan). Setelah itu, rencana makan kamu langsung siap. Jaga streak tiap hari ya!',
-      cta: 'Gas! 🚀',
-      accent: 'amber',
     },
   ];
 
-  // Food emojis floating in background
-  const foodEmojis = ['🍚', '🍳', '🥘', '🍲', '🍱', '🥗', '🍜', '🍢', '🐟', '🌶️', '🥬', '🍜'];
+  // Food emojis for floating background
+  const foodEmojis = ['🍚', '🍳', '🥘', '🍲', '🍱', '🥗', '🍜', '🍢', '🐟', '🌶️', '🥬'];
 
-  function next() {
-    if (step < steps.length - 1) step++;
-    else window.location.href = 'https://t.me/personalized_meal_planner_bot';
+  let activeSection = $state(0);
+  let scrollProgress = $state(0);
+
+  function handleScroll() {
+    const total = document.body.scrollHeight - window.innerHeight;
+    scrollProgress = total > 0 ? (window.scrollY / total) * 100 : 0;
+
+    // Track which section is in view
+    const viewportMid = window.scrollY + window.innerHeight / 2;
+    const els = document.querySelectorAll('.ob-section');
+    els.forEach((el, i) => {
+      const rect = el.getBoundingClientRect();
+      const elTop = rect.top + window.scrollY;
+      const elBottom = elTop + rect.height;
+      if (viewportMid >= elTop && viewportMid < elBottom) {
+        activeSection = i;
+      }
+    });
   }
 
-  function prev() {
-    if (step > 0) step--;
-  }
+  onMount(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  });
 </script>
 
 <div class="onboarding">
@@ -59,63 +66,49 @@
     {/each}
   </div>
 
-  <div class="onboarding-card" data-accent={steps[step].accent}>
-    <!-- Progress bar -->
-    <div class="progress-track">
-      <div class="progress-fill" style="width: {((step + 1) / steps.length) * 100}%"></div>
-    </div>
-    <div class="step-dots">
-      {#each steps as _, i}
-        <div class="dot" class:active={i === step} class:done={i < step}></div>
-      {/each}
-    </div>
-
-    <div class="step-content">
-      <div class="step-icon-wrapper">
-        <div class="step-icon-glow"></div>
-        <div class="step-icon">{steps[step].icon}</div>
-      </div>
-      <h2>{steps[step].title}</h2>
-      <p>{steps[step].desc}</p>
-    </div>
-
-    {#if step === steps.length - 1}
-      <div class="telegram-bridge">
-        <div class="bridge-pulse"></div>
-        <div class="bridge-icon">📱</div>
-        <div class="bridge-text">Kamu bakal diarahkan ke Telegram</div>
-      </div>
-    {/if}
-
-    <div class="step-actions">
-      {#if step > 0}
-        <Button variant="ghost" onclick={prev}>← Kembali</Button>
-      {/if}
-      <Button variant="primary" onclick={next}>{steps[step].cta}</Button>
-    </div>
-
-    {#if step < steps.length - 1}
-      <button class="skip" onclick={() => window.location.href = 'https://t.me/personalized_meal_planner_bot'}>Skip → langsung ke bot</button>
-    {/if}
+  <!-- Scroll progress indicator — thin amber line on left -->
+  <div class="scroll-rail">
+    <div class="scroll-fill" style="height: {scrollProgress}%"></div>
+    {#each sections as _, i}
+      <div class="rail-dot" class:active={activeSection === i} class:done={activeSection > i} style="top: {(i + 0.5) * (100 / sections.length)}%"></div>
+    {/each}
   </div>
+
+  <!-- Sections -->
+  {#each sections as section, i}
+    <section class="ob-section" class:active={activeSection === i}>
+      <div class="section-inner">
+        <div class="icon-glow"></div>
+        <div class="section-icon">{section.icon}</div>
+        <h2>{section.title}</h2>
+        <p>{section.desc}</p>
+        {#if i === sections.length - 1}
+          <div class="telegram-bridge">
+            <div class="bridge-icon">📱</div>
+            <div class="bridge-text">Kamu bakal diarahkan ke Telegram</div>
+          </div>
+          <a href="https://t.me/personalized_meal_planner_bot">
+            <Button variant="primary" size="lg">Gas! 🚀</Button>
+          </a>
+        {/if}
+      </div>
+    </section>
+  {/each}
+
+  <!-- Skip link — always visible -->
+  <a href="https://t.me/personalized_meal_planner_bot" class="skip-link">Skip → langsung ke bot</a>
 </div>
 
 <style>
   .onboarding {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-6);
     position: relative;
-    overflow: hidden;
+    overflow-x: hidden;
   }
 
   /* Floating food background */
   .food-bg {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
+    position: fixed;
+    inset: 0;
     pointer-events: none;
     z-index: 0;
   }
@@ -124,7 +117,7 @@
     left: var(--x);
     top: var(--y);
     font-size: var(--size);
-    opacity: 0.06;
+    opacity: 0.05;
     animation: float 8s ease-in-out infinite;
     animation-delay: var(--delay);
   }
@@ -136,89 +129,102 @@
     .food-float { animation: none; }
   }
 
-  .onboarding-card {
-    max-width: 460px;
-    width: 100%;
-    background: var(--surface);
-    border-radius: var(--radius-xl);
-    padding: var(--space-10) var(--space-8) var(--space-8);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 1px var(--border-strong);
-    text-align: center;
-    position: relative;
-    z-index: 1;
-  }
-
-  /* Progress bar */
-  .progress-track {
-    width: 100%;
-    height: 4px;
+  /* Scroll progress rail — thin amber line on left edge */
+  .scroll-rail {
+    position: fixed;
+    left: var(--space-2);
+    top: 0;
+    bottom: 0;
+    width: 3px;
     background: var(--surface-3);
+    z-index: 100;
     border-radius: var(--radius-pill);
-    overflow: hidden;
-    margin-bottom: var(--space-4);
   }
-  .progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--primary), var(--accent));
+  .scroll-fill {
+    width: 100%;
+    background: linear-gradient(180deg, var(--primary), var(--accent));
     border-radius: var(--radius-pill);
-    transition: width var(--duration-large) var(--ease-standard);
+    transition: height 0.1s linear;
   }
-
-  /* Step dots */
-  .step-dots {
-    display: flex;
-    justify-content: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-8);
-  }
-  .dot {
-    width: 8px; height: 8px;
-    border-radius: var(--radius-pill);
+  .rail-dot {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     background: var(--surface-3);
     transition: all var(--duration-small) var(--ease-standard);
   }
-  .dot.active {
-    width: 24px;
+  .rail-dot.active {
+    width: 12px;
+    height: 12px;
+    background: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-soft);
+  }
+  .rail-dot.done {
     background: var(--primary);
   }
-  .dot.done { background: var(--primary); }
 
-  /* Step content */
-  .step-content { margin-bottom: var(--space-8); }
-  .step-icon-wrapper {
+  /* Sections */
+  .ob-section {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8) var(--space-6);
     position: relative;
-    display: inline-block;
-    margin-bottom: var(--space-5);
+    z-index: 1;
+    opacity: 0.3;
+    transition: opacity var(--duration-large) var(--ease-standard);
   }
-  .step-icon-glow {
+  .ob-section.active {
+    opacity: 1;
+  }
+
+  .section-inner {
+    max-width: 480px;
+    text-align: center;
+    position: relative;
+  }
+
+  .icon-glow {
     position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 120%; height: 120%;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 120px;
     background: radial-gradient(circle, var(--primary-soft) 0%, transparent 60%);
     pointer-events: none;
   }
-  .onboarding-card[data-accent="amber"] .step-icon-glow {
+  .ob-section:nth-child(2) .icon-glow {
     background: radial-gradient(circle, var(--accent-soft) 0%, transparent 60%);
   }
-  .step-icon {
+
+  .section-icon {
     font-size: 4rem;
+    margin-bottom: var(--space-5);
     position: relative;
     z-index: 1;
   }
+
   h2 {
-    font-size: var(--fs-xl);
-    font-weight: var(--fw-semibold);
-    margin-bottom: var(--space-3);
+    font-size: clamp(1.5rem, 4vw, 2rem);
+    font-weight: var(--fw-bold);
+    letter-spacing: var(--ls-tight);
+    margin-bottom: var(--space-4);
     color: var(--text);
-    letter-spacing: var(--ls-snug);
   }
+
   p {
+    font-size: 1.05rem;
     color: var(--text-muted);
-    font-size: var(--fs-md);
     line-height: var(--lh-relaxed);
-    max-width: 360px;
-    margin: 0 auto;
+    margin-bottom: var(--space-6);
+    max-width: 420px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   /* Telegram bridge */
@@ -226,54 +232,29 @@
     background: var(--primary-soft);
     border-radius: var(--radius-md);
     padding: var(--space-3) var(--space-4);
-    margin-bottom: var(--space-6);
-    display: flex;
+    margin-bottom: var(--space-5);
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
     gap: var(--space-2);
-    position: relative;
-    overflow: hidden;
   }
-  .bridge-pulse {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 100%; height: 100%;
-    background: radial-gradient(circle, var(--primary-soft) 0%, transparent 70%);
-    animation: pulse 2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 1; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .bridge-pulse { animation: none; }
-  }
-  .bridge-icon { font-size: var(--fs-lg); position: relative; z-index: 1; }
-  .bridge-text { font-size: var(--fs-sm); color: var(--primary); font-weight: var(--fw-medium); position: relative; z-index: 1; }
+  .bridge-icon { font-size: var(--fs-lg); }
+  .bridge-text { font-size: var(--fs-sm); color: var(--primary); font-weight: var(--fw-medium); }
 
-  /* Actions */
-  .step-actions {
-    display: flex;
-    justify-content: center;
-    gap: var(--space-3);
-    margin-bottom: var(--space-4);
-  }
-  .skip {
+  /* Skip link */
+  .skip-link {
+    display: block;
+    text-align: center;
+    padding: var(--space-6) var(--space-4);
     font-size: var(--fs-sm);
     color: var(--text-faint);
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-family: inherit;
-    padding: var(--space-2) var(--space-4);
-    min-height: 44px;
+    text-decoration: none;
+    position: relative;
+    z-index: 1;
   }
-  .skip:hover { color: var(--text-subtle); }
+  .skip-link:hover { color: var(--text-subtle); }
 
   @media (max-width: 768px) {
-    .onboarding-card { padding: var(--space-8) var(--space-5) var(--space-6); }
-    .step-icon { font-size: 3rem; }
-    h2 { font-size: var(--fs-lg); }
+    .section-icon { font-size: 3rem; }
+    .scroll-rail { display: none; }
   }
 </style>

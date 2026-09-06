@@ -296,7 +296,7 @@
   }
   .regen-btn:disabled { opacity: 0.5; cursor: wait; }
 
-  /* ── Meal body + food list ── */
+  /* ── Meal body + food chips ── */
   .meal-body {
     padding: var(--space-4) var(--space-5);
     flex: 1;
@@ -306,24 +306,32 @@
     margin: 0;
     padding: 0;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: var(--space-2);
   }
   .food-item {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-2);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
     font-size: var(--fs-sm);
-    line-height: var(--lh-relaxed);
     color: var(--text-muted);
+    line-height: 1.4;
+    transition: all var(--duration-micro) var(--ease-standard);
+  }
+  .food-item:hover {
+    border-color: var(--primary);
+    color: var(--text);
+    background: var(--primary-soft);
   }
   .food-bullet {
     color: var(--primary);
-    font-size: var(--fs-xs);
-    line-height: var(--lh-relaxed);
+    font-size: 0.6rem;
     flex-shrink: 0;
-    margin-top: 2px;
-    opacity: 0.8;
+    opacity: 0.7;
   }
   .food-text { flex: 1; }
   .food-raw {
