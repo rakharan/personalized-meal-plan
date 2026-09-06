@@ -94,5 +94,7 @@
     <div style="margin-top:var(--space-4);"><Button variant="secondary" onclick={retry}>Coba lagi</Button></div>
   </div>
 {:else if RouteComponent}
-  <RouteComponent {routes} currentHash={currentRoute.hash} />
+  {#key currentRoute.hash}
+    <RouteComponent {routes} currentHash={currentRoute.hash} />
+  {/key}
 {/if}
