@@ -15,10 +15,10 @@
   let mobileNavOpen = $state(false);
 
   const navItems = [
-    { href: '#/dashboard', icon: '📊', label: 'Dasbor' },
-    { href: '#/profile', icon: '👤', label: 'Profil' },
-    { href: '#/history', icon: '📋', label: 'Riwayat' },
-    { href: '#/settings', icon: '⚙️', label: 'Pengaturan' },
+    { href: '#/dashboard', label: 'Dasbor' },
+    { href: '#/profile', label: 'Profil' },
+    { href: '#/history', label: 'Riwayat' },
+    { href: '#/settings', label: 'Pengaturan' },
   ];
 
   function closeMobileNav() { mobileNavOpen = false; }
@@ -36,14 +36,14 @@
 {/if}
 
 <nav class="user-nav">
-  <a href="#/dashboard" class="brand">🍽️ Sa<span>ji</span></a>
+  <a href="#/dashboard" class="brand">Sa<span>ji</span></a>
   <div class="nav-links" class:open={mobileNavOpen}>
     {#each navItems as item}
       <a href={item.href} class:active={current === item.href} onclick={closeMobileNav}>
-        <span class="nav-icon">{item.icon}</span> {item.label}
+        {item.label}
       </a>
     {/each}
-    <button class="logout-btn" onclick={logout}>🚪 Logout</button>
+    <button class="logout-btn" onclick={logout}>Logout</button>
   </div>
   <button class="hamburger" onclick={() => mobileNavOpen = !mobileNavOpen} aria-label="Menu navigasi">
     {#if mobileNavOpen}✕{:else}☰{/if}
@@ -78,7 +78,6 @@
   }
   .nav-links a:hover { color: var(--text); }
   .nav-links a.active { color: var(--primary); border-bottom-color: var(--primary); }
-  .nav-icon { font-size: var(--fs-md); }
 
   .logout-btn {
     background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);

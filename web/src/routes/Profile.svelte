@@ -32,10 +32,16 @@
 {#if profile}
 <UserLayout current="#/profile">
   <div class="profile-main">
-    <h1>Edit Profil</h1>
+    <div class="page-head">
+      <h1>Edit Profil</h1>
+      <p class="page-sub">Atur data pribadi, target, dan preferensi masakanmu.</p>
+    </div>
 
     <section class="card">
-      <h3>Personal</h3>
+      <div class="card-head">
+        <span class="card-kicker">01</span>
+        <h3>Personal</h3>
+      </div>
       <div class="grid-2">
         <Input label="Nama" bind:value={profile.full_name} />
         <Input label="Umur" type="number" bind:value={profile.age} />
@@ -55,7 +61,10 @@
     </section>
 
     <section class="card">
-      <h3>Goal & Target</h3>
+      <div class="card-head">
+        <span class="card-kicker">02</span>
+        <h3>Goal &amp; Target</h3>
+      </div>
       <div class="field-group">
         <label class="input-label" for="prof-goal">Goal</label>
         <select id="prof-goal" bind:value={profile.goal} class="select-input">
@@ -72,7 +81,10 @@
     </section>
 
     <section class="card">
-      <h3>Kesehatan</h3>
+      <div class="card-head">
+        <span class="card-kicker">03</span>
+        <h3>Kesehatan</h3>
+      </div>
       <Input label="Alergi" bind:value={profile.allergies} />
       <Input label="Pantangan Diet" bind:value={profile.dietary_restrictions} />
       <Input label="Kondisi Kesehatan" bind:value={profile.health_conditions} />
@@ -80,7 +92,10 @@
     </section>
 
     <section class="card">
-      <h3>Preferensi</h3>
+      <div class="card-head">
+        <span class="card-kicker">04</span>
+        <h3>Preferensi</h3>
+      </div>
       <div class="field-group">
         <label class="input-label" for="prof-cuisine">Masakan</label>
         <select id="prof-cuisine" bind:value={profile.cuisine_rotation} class="select-input">
@@ -104,22 +119,76 @@
       </div>
     </section>
 
-    {#if saved}<div class="saved-msg">✅ Tersimpan!</div>{/if}
-    {#if error}<Alert variant="danger">{error}</Alert>{/if}
-    <Button variant="primary" loading={saving} onclick={save}>Simpan Profil</Button>
+    <div class="actions">
+      {#if saved}<div class="saved-msg">Tersimpan</div>{/if}
+      {#if error}<Alert variant="danger">{error}</Alert>{/if}
+      <Button variant="primary" loading={saving} onclick={save}>Simpan Profil</Button>
+    </div>
   </div>
 </UserLayout>
 {/if}
 
 <style>
-  .profile-main { max-width: 600px; margin: 0 auto; }
-  h1 { font-size: var(--fs-xl); font-weight: var(--fw-semibold); margin-bottom: var(--space-6); }
-  .card { background: var(--surface); border-radius: var(--radius-md); padding: var(--space-5); box-shadow: var(--shadow-elevation-1); margin-bottom: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+  .profile-main { max-width: 640px; margin: 0 auto; }
+  .page-head { margin-bottom: var(--space-6); }
+  h1 { font-size: var(--fs-2xl); font-weight: var(--fw-bold); letter-spacing: var(--ls-tight); color: var(--text); }
+  .page-sub { font-size: var(--fs-sm); color: var(--text-subtle); margin-top: var(--space-2); }
+
+  .card {
+    background: linear-gradient(160deg, var(--surface) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-elevation-1);
+    margin-bottom: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    position: relative;
+    overflow: hidden;
+  }
+  .card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: linear-gradient(180deg, var(--accent), transparent);
+    opacity: 0.7;
+  }
+  .card-head { display: flex; align-items: center; gap: var(--space-3); }
+  .card-kicker {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    font-weight: var(--fw-medium);
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-pill);
+    letter-spacing: var(--ls-wide);
+  }
   .card h3 { font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text); }
+
   .field-group { display: flex; flex-direction: column; gap: var(--space-1); }
   .input-label { font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--text-subtle); text-transform: uppercase; letter-spacing: var(--ls-wide); }
-  .select-input { padding: var(--space-2) var(--space-3); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: var(--fs-sm); font-family: inherit; min-height: 44px; appearance: none; }
+  .select-input {
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text); font-size: var(--fs-sm); font-family: inherit;
+    min-height: 44px; appearance: none;
+    transition: border-color var(--duration-micro) var(--ease-standard);
+  }
+  .select-input:focus { border-color: var(--primary); outline: none; }
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
-  .saved-msg { color: var(--success); font-size: var(--fs-sm); margin-bottom: var(--space-3); }
+
+  .actions { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-4); }
+  .saved-msg {
+    color: var(--success); font-size: var(--fs-sm); font-weight: var(--fw-medium);
+    background: rgba(82,183,136,0.10);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    align-self: flex-start;
+  }
   @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
 </style>

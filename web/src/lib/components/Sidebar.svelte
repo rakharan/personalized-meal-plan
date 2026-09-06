@@ -3,12 +3,12 @@
   import { theme } from '$lib/stores/theme.svelte';
 
   let {
-    items = [] as { href: string; icon: string; label: string }[],
+    items = [] as { href: string; label: string }[],
     brand = 'Saji',
     current = '',
     children,
   }: {
-    items: { href: string; icon: string; label: string }[];
+    items: { href: string; label: string }[];
     brand?: string;
     current?: string;
     children?: Snippet;
@@ -34,7 +34,7 @@
 </button>
 
 <nav class="sidebar" class:open={mobileNavOpen}>
-  <div class="sidebar-brand">🍽️ {brand.slice(0,2)}<span>{brand.slice(2)}</span></div>
+  <div class="sidebar-brand">{brand.slice(0,2)}<span>{brand.slice(2)}</span></div>
   <div class="nav-list">
     {#each items as item}
       <a
@@ -42,7 +42,6 @@
         class:active={item.href === current}
         onclick={closeMobileNav}
       >
-        <span class="icon">{item.icon}</span>
         {item.label}
       </a>
     {/each}
@@ -118,11 +117,6 @@
     color: var(--text);
     background: var(--primary-soft);
     border-left-color: var(--primary);
-  }
-  .nav-list a .icon, :global(.nav-bottom a .icon), :global(.theme-toggle .icon) {
-    font-size: var(--fs-md);
-    width: 20px;
-    text-align: center;
   }
   .nav-bottom { margin-top: auto; }
   :global(.theme-toggle) {

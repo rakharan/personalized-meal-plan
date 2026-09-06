@@ -33,7 +33,7 @@
     <Alert variant="danger" title="Error">{error}</Alert>
   {:else if data}
     <div class="stats-grid">
-      <StatCard value={data.totalTokens} label="Total Tokens (200 rows)" icon="🪙" />
+      <StatCard value={data.totalTokens} label="Total Tokens (200 rows)" />
     </div>
     <DataTable {columns} rows={data.rows} empty="No usage yet" />
   {/if}

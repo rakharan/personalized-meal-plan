@@ -2,20 +2,17 @@
   let {
     value = 0,
     label = '',
-    icon = undefined as string | undefined,
     trend = undefined as { value: string; positive: boolean } | undefined,
     highlight = false,
   }: {
     value: number | string;
     label: string;
-    icon?: string;
     trend?: { value: string; positive: boolean };
     highlight?: boolean;
   } = $props();
 </script>
 
 <div class="stat-card" class:highlight>
-  {#if icon}<span class="stat-icon">{icon}</span>{/if}
   <div class="stat-num">{value}</div>
   <div class="stat-label">{label}</div>
   {#if trend}
@@ -55,13 +52,6 @@
   }
   .stat-card.highlight .stat-num {
     color: var(--primary);
-  }
-  .stat-icon {
-    position: absolute;
-    top: var(--space-3);
-    right: var(--space-3);
-    font-size: var(--fs-lg);
-    opacity: 0.4;
   }
   .stat-num {
     font-size: var(--fs-2xl);

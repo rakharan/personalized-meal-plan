@@ -99,10 +99,10 @@
   <section>
     <h2>StatCard</h2>
     <div class="stats-demo">
-      <StatCard value={42} label="Total Users" icon="👥" />
-      <StatCard value={7} label="Day Streak" icon="🔥" trend={{ value: '+2', positive: true }} />
-      <StatCard value="95%" label="Good Ratio" icon="👍" trend={{ value: '-3%', positive: false }} />
-      <StatCard value={1337} label="Tokens Today" icon="🪙" />
+      <StatCard value={42} label="Total Users" />
+      <StatCard value={7} label="Day Streak" trend={{ value: '+2', positive: true }} />
+      <StatCard value="95%" label="Good Ratio" trend={{ value: '-3%', positive: false }} />
+      <StatCard value={1337} label="Tokens Today" />
     </div>
   </section>
 
@@ -131,7 +131,7 @@
   <section>
     <h2>EmptyState</h2>
     <div class="card-surface">
-      <EmptyState icon="🍽️" title="Belum ada rencana makan" description="Jalankan /mealplan untuk mulai">
+      <EmptyState title="Belum ada rencana makan" description="Jalankan /mealplan untuk mulai">
       </EmptyState>
     </div>
   </section>

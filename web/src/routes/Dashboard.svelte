@@ -73,23 +73,23 @@
 
     <h2 class="section-title">Pengguna</h2>
     <div class="stats-grid">
-      <StatCard value={data.totalUsers} label="Total Pengguna" icon="👥" highlight />
-      <StatCard value={data.activeSubs} label="Langganan Aktif" icon="📬" />
-      <StatCard value={data.retention7d} label="Retensi 7 Hari" icon="📈" highlight />
+      <StatCard value={data.totalUsers} label="Total Pengguna" highlight />
+      <StatCard value={data.activeSubs} label="Langganan Aktif" />
+      <StatCard value={data.retention7d} label="Retensi 7 Hari" highlight />
     </div>
 
     <h2 class="section-title">Engagement</h2>
     <div class="stats-grid">
-      <StatCard value={data.avgStreak} label="Rata-rata Streak" icon="🔥" />
-      <StatCard value={data.maxStreak} label="Streak Terpanjang" icon="🏆" />
-      <StatCard value={data.referrals} label="Referral" icon="🔗" />
+      <StatCard value={data.avgStreak} label="Rata-rata Streak" />
+      <StatCard value={data.maxStreak} label="Streak Terpanjang" />
+      <StatCard value={data.referrals} label="Referral" />
     </div>
 
     <h2 class="section-title">Operasional</h2>
     <div class="stats-grid">
-      <StatCard value={data.todayPushed} label="Dikirim Hari Ini" icon="🚀" />
-      <StatCard value={data.plansCount} label="Rencana Disimpan" icon="📋" />
-      <StatCard value={data.tokensToday} label="Token Hari Ini" icon="🪙" />
+      <StatCard value={data.todayPushed} label="Dikirim Hari Ini" />
+      <StatCard value={data.plansCount} label="Rencana Disimpan" />
+      <StatCard value={data.tokensToday} label="Token Hari Ini" />
     </div>
 
     <div class="charts">

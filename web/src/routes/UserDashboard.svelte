@@ -161,19 +161,19 @@
 
     <!-- ═══ Quick Stats Row ═══ -->
     <div class="stats-grid">
-      <StatCard value={profile.meals_per_day || 3} label="Makan/hari" icon="🍴" />
+      <StatCard value={profile.meals_per_day || 3} label="Makan/hari" />
       <StatCard
         value={profile.cuisine_rotation === 'rotate' ? 'Rotasi' : profile.cuisine_rotation || '—'}
-        label="Masakan" icon="🥘" />
+        label="Masakan" />
       <StatCard
         value={profile.streak_days || 0}
-        label="Streak" icon="🔥"
+        label="Streak"
         highlight={(profile.streak_days || 0) > 0} />
       <StatCard
         value={profile.budget_tier || '—'}
-        label="Budget" icon="💰" />
+        label="Budget" />
       {#if profile.referral_count}
-        <StatCard value={profile.referral_count} label="Referral" icon="👥" />
+        <StatCard value={profile.referral_count} label="Referral" />
       {/if}
     </div>
 

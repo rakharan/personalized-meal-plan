@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import { pool, migrateSchema } from './store.js';
 import type { Request, Response } from 'express';
 
@@ -7,7 +8,9 @@ const PORT = Number(process.env.DASHBOARD_PORT ?? 3000);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'changeme';
 
 const app = express();
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Parse cookies for auth middleware
 function parseCookies(req: Request): Record<string, string> {
@@ -21,14 +24,24 @@ function parseCookies(req: Request): Record<string, string> {
   return out;
 }
 
+function getToken(req: Request): string | null {
+  const cookies = parseCookies(req);
+  return cookies.admin_token || (req.query.token as string) || req.headers.authorization?.replace('Bearer ', '') || null;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
-// Auth middleware
+// Auth middleware — HTML pages redirect, JSON API returns 401
 // ────────────────────────────────────────────────────────────────────────────
 function authCheck(req: Request, res: Response, next: any): void {
-  const cookies = parseCookies(req);
-  const token = cookies.admin_token || req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = getToken(req);
   if (token === ADMIN_TOKEN) { next(); return; }
   res.redirect('/login');
+}
+
+function apiAuth(req: Request, res: Response, next: any): void {
+  const token = getToken(req);
+  if (token === ADMIN_TOKEN) { next(); return; }
+  res.status(401).json({ error: 'Unauthorized' });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -305,14 +318,117 @@ app.get('/referrals', authCheck, async (_req: Request, res: Response) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// JSON stats API
+// JSON API for SPA admin
 // ────────────────────────────────────────────────────────────────────────────
-app.get('/api/stats', authCheck, async (_req: Request, res: Response) => {
-  const [total, subs] = await Promise.all([
+app.get('/api/stats', apiAuth, async (_req: Request, res: Response) => {
+  const [total, subs, todayPushed, avgStreak, maxStreak, feedback, localeDist, pushDist, retention7d, plansCount, tierDist, referralCount, tokensToday] = await Promise.all([
     pool.query('SELECT COUNT(*)::int FROM subscribers'),
     pool.query("SELECT COUNT(*)::int FROM subscribers WHERE subscribed = 1"),
+    pool.query("SELECT COUNT(*)::int FROM subscribers WHERE last_pushed = to_char(CURRENT_DATE, 'YYYY-MM-DD')"),
+    pool.query('SELECT COALESCE(AVG(streak),0)::float FROM subscribers'),
+    pool.query('SELECT COALESCE(MAX(streak),0)::int FROM subscribers'),
+    pool.query("SELECT last_feedback, COUNT(*)::int FROM subscribers WHERE last_feedback IS NOT NULL GROUP BY last_feedback"),
+    pool.query('SELECT locale, COUNT(*)::int FROM subscribers GROUP BY locale'),
+    pool.query('SELECT push_hour, push_min, COUNT(*)::int FROM subscribers WHERE push_hour IS NOT NULL GROUP BY push_hour, push_min ORDER BY push_hour'),
+    pool.query("SELECT COUNT(*)::int FROM subscribers WHERE last_pushed >= to_char(NOW() - INTERVAL '7 days', 'YYYY-MM-DD')"),
+    pool.query('SELECT COUNT(*)::int FROM plans'),
+    pool.query("SELECT tier, COUNT(*)::int FROM subscribers GROUP BY tier"),
+    pool.query('SELECT COUNT(*)::int FROM referrals'),
+    pool.query("SELECT COALESCE(SUM(tokens),0)::int FROM usage_log WHERE created >= CURRENT_DATE"),
   ]);
-  res.json({ totalUsers: total.rows[0].count, activeSubs: subs.rows[0].count });
+  res.json({
+    totalUsers: total.rows[0].count,
+    activeSubs: subs.rows[0].count,
+    todayPushed: todayPushed.rows[0].count,
+    avgStreak: Math.round(avgStreak.rows[0].count * 10) / 10,
+    maxStreak: maxStreak.rows[0].count,
+    feedback: feedback.rows,
+    locale: localeDist.rows,
+    pushDist: pushDist.rows,
+    retention7d: retention7d.rows[0].count,
+    plansCount: plansCount.rows[0].count,
+    tiers: tierDist.rows,
+    referrals: referralCount.rows[0].count,
+    tokensToday: tokensToday.rows[0].count,
+  });
+});
+
+app.get('/api/users', apiAuth, async (req: Request, res: Response) => {
+  const page = Number(req.query.page ?? 1);
+  const limit = 50;
+  const offset = (page - 1) * limit;
+  const [result, countResult] = await Promise.all([
+    pool.query('SELECT chat_id, locale, subscribed, streak, last_pushed, push_hour, push_min, last_feedback, tier, created_at FROM subscribers ORDER BY chat_id DESC LIMIT $1 OFFSET $2', [limit, offset]),
+    pool.query('SELECT COUNT(*)::int FROM subscribers'),
+  ]);
+  res.json({ users: result.rows, total: countResult.rows[0].count, page, totalPages: Math.ceil(countResult.rows[0].count / limit) });
+});
+
+app.get('/api/plans', apiAuth, async (_req: Request, res: Response) => {
+  const result = await pool.query(`
+    SELECT p.id, p.chat_id, p.name, p.created,
+           s.locale, s.tier
+    FROM plans p
+    LEFT JOIN subscribers s ON s.chat_id = p.chat_id
+    ORDER BY p.created DESC
+    LIMIT 200
+  `);
+  res.json({ plans: result.rows });
+});
+
+app.get('/api/feedback', apiAuth, async (_req: Request, res: Response) => {
+  const result = await pool.query(`
+    SELECT chat_id, locale, last_feedback, streak, last_pushed
+    FROM subscribers
+    WHERE last_feedback IS NOT NULL
+    ORDER BY last_pushed DESC NULLS LAST
+    LIMIT 200
+  `);
+  const good = result.rows.filter((r: any) => r.last_feedback === 'good').length;
+  const bad = result.rows.filter((r: any) => r.last_feedback === 'bad').length;
+  res.json({ feedback: result.rows, good, bad });
+});
+
+app.get('/api/usage', apiAuth, async (_req: Request, res: Response) => {
+  const result = await pool.query(`
+    SELECT u.chat_id, u.tokens, u.feature, u.created,
+           s.locale, s.tier
+    FROM usage_log u
+    LEFT JOIN subscribers s ON s.chat_id = u.chat_id
+    ORDER BY u.created DESC
+    LIMIT 200
+  `);
+  res.json({ usage: result.rows });
+});
+
+app.get('/api/referrals', apiAuth, async (_req: Request, res: Response) => {
+  const result = await pool.query(`
+    SELECT r.referred_id, r.created,
+           s_ref.locale AS ref_locale,
+           (SELECT COUNT(*) FROM referrals r2 WHERE r2.referrer_id = r.referred_id) AS their_referrals
+    FROM referrals r
+    LEFT JOIN subscribers s_ref ON s_ref.chat_id = r.referred_id
+    ORDER BY r.created DESC
+    LIMIT 200
+  `);
+  res.json({ referrals: result.rows });
+});
+
+app.get('/api/overview', apiAuth, async (_req: Request, res: Response) => {
+  const [total, subs, plans, referrals, tokens] = await Promise.all([
+    pool.query('SELECT COUNT(*)::int FROM subscribers'),
+    pool.query("SELECT COUNT(*)::int FROM subscribers WHERE subscribed = 1"),
+    pool.query('SELECT COUNT(*)::int FROM plans'),
+    pool.query('SELECT COUNT(*)::int FROM referrals'),
+    pool.query("SELECT COALESCE(SUM(tokens),0)::int FROM usage_log WHERE created >= CURRENT_DATE"),
+  ]);
+  res.json({
+    totalUsers: total.rows[0].count,
+    activeSubs: subs.rows[0].count,
+    plansCount: plans.rows[0].count,
+    referrals: referrals.rows[0].count,
+    tokensToday: tokens.rows[0].count,
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

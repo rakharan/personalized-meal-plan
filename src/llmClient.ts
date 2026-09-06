@@ -24,84 +24,100 @@ export interface MealPlanOptions {
   };
 }
 
+export interface LLMResult {
+  content: string;
+  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
+
+// Usage callback — set by index.ts to log to DB
+let usageCallback: ((chatId: number, tokens: number, feature: string) => Promise<void>) | null = null;
+
+export function setUsageCallback(cb: (chatId: number, tokens: number, feature: string) => Promise<void>): void {
+  usageCallback = cb;
+}
+
+async function logUsageSafe(chatId: number | undefined, usage: { total_tokens: number } | undefined, feature: string): Promise<void> {
+  if (!chatId || !usageCallback || !usage?.total_tokens) return;
+  try { await usageCallback(chatId, usage.total_tokens, feature); } catch { /* silent */ }
+}
+
 // ────────────────────────────────────────────────────────────────────────────
-// System prompt is built per-locale so the model answers in the right language.
+// System prompt — compact for token efficiency
 // ────────────────────────────────────────────────────────────────────────────
 function systemPrompt(locale: 'en' | 'id'): string {
   const id = locale === 'id';
-  const langLine = id
-    ? 'Tulis seluruh jawaban dalam Bahasa Indonesia.'
-    : 'Write the entire answer in English.';
-
-  return `You are a practical nutrition assistant. ${langLine}
-Generate a single day's meal plan tailored to the user's stated goal, dietary restrictions,
-allergies, calorie target, protein target, and preferred number of meals. Rules:
-- Respect allergies and restrictions strictly — never include a flagged ingredient.
-- All ingredients MUST be commonly available in Indonesia (use Indonesian names where natural,
-  e.g. tempe, ikan kembung, kangkung, tahu, kecap manis).
-- If a calorie target is given, keep the day's total within ~5% of it and show an estimated
-  calorie count per meal.
-- If a protein target (g) is given, aim for it across the day and show an estimated protein
-  count per meal.
-- Structure the output as a clean list: meal name, what to eat, rough calories (+ protein g).
-- Keep it realistic and buyable with common ingredients unless the user requested a specific cuisine.
-- If the user asked for a different cuisine each day, pick ONE cuisine for today and name it at
-  the top (e.g. ${id ? '"Hari ini: Masakan Jepang"' : '"Today: Japanese"'}).
-${id ? '- Jangan tambahkan disclaimer tentang AI atau "konsultasi dokter" — berikan rencananya saja.' : '- Do not add disclaimers about being an AI or "consult a doctor" — just give the plan.'}
-- Output plain text formatted for a Telegram message (short lines, simple dashes), no markdown tables.`;
+  const lang = id ? 'Bahasa Indonesia.' : 'English.';
+  return `Nutrition assistant. Write in ${lang} Generate one day meal plan. Rules:
+- Respect allergies/restrictions — never include flagged ingredients
+- Ingredients MUST be available in Indonesia (tempe, ikan kembung, kangkung, tahu, kecap manis)
+- If calorie target given: stay within ~5%, show per-meal calories
+- If protein target given: aim for it, show per-meal protein (g)
+- Format: meal name, items, calories (+ protein g)
+- If rotate cuisine: pick ONE, name at top (${id ? '"Hari ini: Jepang"' : '"Today: Japanese"'})
+- Plain text, short lines, no markdown tables, no disclaimers`;
 }
 
 function buildUserPrompt(answers: Record<string, any>, opts: MealPlanOptions = {}): string {
-  const {
-    goal, restrictions, allergies, calories, mealsPerDay, cuisine,
-  } = answers;
+  const { goal, restrictions, allergies, calories, mealsPerDay, cuisine } = answers;
   const lines: string[] = [
     `Goal: ${goal}`,
-    `Dietary restrictions: ${restrictions || 'none'}`,
-    `Allergies/must-avoid: ${allergies || 'none'}`,
-    `Calorie target: ${calories || 'no specific target, use a sensible default for the goal'}`,
-    `Protein target: ${answers.protein ? answers.protein + 'g' : 'no specific target'}`,
-    `Meals per day: ${mealsPerDay}`,
-    `Cuisine preference: ${cuisine || 'no preference'}`,
+    `Diet: ${restrictions || 'none'}`,
+    `Allergies: ${allergies || 'none'}`,
+    `Calories: ${calories || 'auto'}`,
+    `Protein: ${answers.protein ? answers.protein + 'g' : 'auto'}`,
+    `Meals/day: ${mealsPerDay}`,
+    `Cuisine: ${cuisine || 'any'}`,
   ];
-
-  // Enhanced profile context
   if (opts.profileContext) {
     const p = opts.profileContext;
     if (p.age) lines.push(`Age: ${p.age}`);
     if (p.gender) lines.push(`Gender: ${p.gender}`);
     if (p.height_cm) lines.push(`Height: ${p.height_cm}cm`);
     if (p.weight_kg) lines.push(`Weight: ${p.weight_kg}kg`);
-    if (p.activity_level) lines.push(`Activity level: ${p.activity_level}`);
+    if (p.activity_level) lines.push(`Activity: ${p.activity_level}`);
     if (p.cooking_skill) lines.push(`Cooking skill: ${p.cooking_skill}`);
-    if (p.household_size && p.household_size > 1) lines.push(`Cooking for ${p.household_size} people`);
+    if (p.household_size && p.household_size > 1) lines.push(`For ${p.household_size} people`);
     if (p.budget_tier) lines.push(`Budget: ${p.budget_tier}`);
-    if (p.health_conditions) lines.push(`Health conditions: ${p.health_conditions}`);
-    if (p.disliked_ingredients) lines.push(`Disliked ingredients: ${p.disliked_ingredients}`);
+    if (p.health_conditions) lines.push(`Health: ${p.health_conditions}`);
+    if (p.disliked_ingredients) lines.push(`Dislike: ${p.disliked_ingredients}`);
   }
-
   if (opts.avoidCuisines?.length) {
-    lines.push(`Cuisines already used recently (pick a DIFFERENT one): ${opts.avoidCuisines.join(', ')}`);
+    lines.push(`Avoid cuisines: ${opts.avoidCuisines.join(', ')}`);
   }
   if (opts.regenerate) {
-    lines.push('This is a re-roll — make it noticeably different from a typical plan (different dishes, different flavors).');
+    lines.push('Re-roll: make it different (different dishes, flavors).');
   }
-  lines.push('', 'Generate today\'s meal plan.');
+  lines.push('', "Generate today's meal plan.");
   return lines.join('\n');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Low-level call — shared by all public functions. Retries on empty content.
+// Low-level call — returns content + usage. Retries on empty content.
 // ────────────────────────────────────────────────────────────────────────────
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseResponse(raw: string): { data: any; content: string } | null {
+  const jsonEnd = raw.lastIndexOf('}');
+  const jsonStr = jsonEnd === -1 ? raw : raw.slice(0, jsonEnd + 1);
+  let data: any;
+  try {
+    data = JSON.parse(jsonStr);
+  } catch {
+    return null;
+  }
+  const msg = data?.choices?.[0]?.message;
+  const content = msg?.content?.trim();
+  if (!content) return null;
+  return { data, content };
 }
 
 async function callLLM(
   systemContent: string,
   userContent: string,
   { temperature = 0.6, maxTokens = 8192 }: { temperature?: number; maxTokens?: number } = {},
-): Promise<string> {
+): Promise<LLMResult> {
   let lastErr: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -116,7 +132,6 @@ async function callLLM(
           model: MODEL,
           temperature,
           max_tokens: maxTokens,
-          // Try to suppress reasoning/thinking if the backend supports it.
           thinking: false,
           messages: [
             { role: 'system', content: systemContent },
@@ -131,24 +146,15 @@ async function callLLM(
       }
 
       const raw = await res.text();
-      const jsonEnd = raw.lastIndexOf('}');
-      const jsonStr = jsonEnd === -1 ? raw : raw.slice(0, jsonEnd + 1);
-      let data: any;
-      try {
-        data = JSON.parse(jsonStr);
-      } catch {
-        throw new Error(`LLM server returned non-JSON: ${raw.slice(0, 200)}`);
-      }
-
-      const msg = data?.choices?.[0]?.message;
-      const content = msg?.content?.trim();
-
-      if (!content) {
-        // Empty content = empty stream from provider. Retryable.
+      const parsed = parseResponse(raw);
+      if (!parsed) {
         throw new Error('LLM server returned no content (possible upstream error or empty stream).');
       }
 
-      return sanitizePlanOutput(content);
+      const content = sanitizePlanOutput(parsed.content);
+      const usage = parsed.data?.usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+
+      return { content, usage };
     } catch (err) {
       lastErr = err as Error;
       console.error(`LLM attempt ${attempt}/${MAX_RETRIES} failed:`, (err as Error).message);
@@ -181,11 +187,12 @@ async function callLLM(
       });
       if (res.ok) {
         const raw = await res.text();
-        const jsonEnd = raw.lastIndexOf('}');
-        const jsonStr = jsonEnd === -1 ? raw : raw.slice(0, jsonEnd + 1);
-        const data = JSON.parse(jsonStr);
-        const content = data?.choices?.[0]?.message?.content?.trim();
-        if (content) return sanitizePlanOutput(content);
+        const parsed = parseResponse(raw);
+        if (parsed) {
+          const content = sanitizePlanOutput(parsed.content);
+          const usage = parsed.data?.usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+          return { content, usage };
+        }
       }
     } catch (fbErr) {
       console.error('Fallback model also failed:', (fbErr as Error).message);
@@ -200,100 +207,71 @@ async function callLLM(
 // ────────────────────────────────────────────────────────────────────────────
 function sanitizePlanOutput(text: string): string {
   let s = text;
-
-  // Strip markdown tables — model sometimes ignores "no tables" instruction
-  // Removes lines like |---|---| and table rows
-  s = s.replace(/^\|.*\|$/gm, '');    // table rows
-  s = s.replace(/^\|[-:\s|]+\|$/gm, ''); // separator rows
-
-  // Strip markdown bold/italic
+  s = s.replace(/^\|.*\|$/gm, '');
+  s = s.replace(/^\|[-:\s|]+\|$/gm, '');
   s = s.replace(/\*\*(.+?)\*\*/g, '$1');
   s = s.replace(/\*(.+?)\*/g, '$1');
   s = s.replace(/__(.+?)__/g, '$1');
-
-  // Strip markdown headers
   s = s.replace(/^#{1,6}\s+/gm, '');
-
-  // Collapse multiple blank lines
   s = s.replace(/\n{3,}/g, '\n\n');
-
-  // Trim leading/trailing whitespace
   return s.trim();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Multi-day plan — generate N days in one call
+// Public API — all accept chatId for usage tracking
 // ────────────────────────────────────────────────────────────────────────────
-export async function generateWeeklyPlan(
-  answers: Record<string, any>,
-  opts: MealPlanOptions = {},
-): Promise<string> {
-  const locale = opts.locale || 'en';
-  const sys = systemPrompt(locale) + '\n\nGenerate a 7-day meal plan (one per day) with different cuisine each day. Label each day clearly (Day 1, Day 2, etc).';
-  const user = buildUserPrompt(answers, opts) + '\n\nGenerate a 7-day meal plan (one per day) with different cuisine each day. Label each day clearly (Day 1, Day 2, etc).';
-  return callLLM(sys, user, { temperature: 0.7, maxTokens: 8192 });
-}
-
 export async function generateMealPlan(
   answers: Record<string, any>,
   opts: MealPlanOptions = {},
+  chatId?: number,
 ): Promise<string> {
   const locale = opts.locale || 'en';
-  return callLLM(systemPrompt(locale), buildUserPrompt(answers, opts), {
+  const result = await callLLM(systemPrompt(locale), buildUserPrompt(answers, opts), {
     temperature: opts.regenerate ? 0.85 : 0.6,
     maxTokens: 8192,
   });
+  await logUsageSafe(chatId, result.usage, 'mealplan');
+  return result.content;
 }
 
-export async function generateShoppingList(planText: string, locale: 'en' | 'id' = 'en'): Promise<string> {
-  const sys = locale === 'id'
-    ? 'Kamu asisten belanja. Dari rencana makan yang diberikan, ekstrak daftar belanja lengkap: bahan + jumlah perkiraan. Format: nama bahan — jumlah. Kelompokkan per kategori (Protein, Sayur, Lainnya). Tanpa disclaimer.'
-    : 'You are a shopping assistant. From the given meal plan, extract a full shopping list: ingredient + rough quantity. Format: ingredient name — quantity. Group by category (Protein, Produce, Other). No disclaimers.';
-  return callLLM(sys, planText, { temperature: 0.3, maxTokens: 8192 });
+export async function generateWeeklyPlan(
+  answers: Record<string, any>,
+  opts: MealPlanOptions = {},
+  chatId?: number,
+): Promise<string> {
+  const locale = opts.locale || 'en';
+  const sys = systemPrompt(locale) + '\n\nGenerate a 7-day plan, different cuisine each day. Label Day 1, Day 2, etc.';
+  const user = buildUserPrompt(answers, opts) + '\n\nGenerate a 7-day plan, different cuisine each day. Label Day 1, Day 2, etc.';
+  const result = await callLLM(sys, user, { temperature: 0.7, maxTokens: 8192 });
+  await logUsageSafe(chatId, result.usage, 'weekly');
+  return result.content;
 }
 
-export async function generateMacros(planText: string, locale: 'en' | 'id' = 'en'): Promise<string> {
+export async function generateShoppingList(planText: string, locale: 'en' | 'id' = 'en', chatId?: number): Promise<string> {
   const sys = locale === 'id'
-    ? 'Kamu analis nutrisi. Dari rencana makan, hitung total: kalori, protein (g), karbohidrat (g), lemak (g). Tampilkan per meal dan total hari. Format ringkas untuk Telegram.'
-    : 'You are a nutrition analyst. From the meal plan, compute totals: calories, protein (g), carbs (g), fat (g). Show per meal and daily total. Concise Telegram format.';
-  return callLLM(sys, planText, { temperature: 0.2, maxTokens: 8192 });
+    ? 'Asisten belanja. Ekstrak daftar belanja dari rencana makan: bahan + jumlah. Kelompokkan (Protein, Sayur, Lainnya). Tanpa disclaimer.'
+    : 'Shopping assistant. Extract shopping list from meal plan: ingredient + quantity. Group by category (Protein, Produce, Other). No disclaimers.';
+  const result = await callLLM(sys, planText, { temperature: 0.3, maxTokens: 4096 });
+  await logUsageSafe(chatId, result.usage, 'shopping');
+  return result.content;
 }
 
-export async function generateCookingSteps(planText: string, locale: 'en' | 'id' = 'en'): Promise<string> {
+export async function generateMacros(planText: string, locale: 'en' | 'id' = 'en', chatId?: number): Promise<string> {
   const sys = locale === 'id'
-    ? `Kamu koki praktis. Dari rencana makan yang diberikan, buat panduan masak untuk SETIAP meal:
+    ? 'Analis nutrisi. Hitung total: kalori, protein (g), karbo (g), lemak (g). Per meal + total hari. Format ringkas.'
+    : 'Nutrition analyst. Compute totals: calories, protein (g), carbs (g), fat (g). Per meal + daily total. Concise format.';
+  const result = await callLLM(sys, planText, { temperature: 0.2, maxTokens: 4096 });
+  await logUsageSafe(chatId, result.usage, 'macros');
+  return result.content;
+}
 
- Untuk setiap meal, tampilkan:
- 1. 🍳 Peralatan — daftar alat masak (wajan, panci, talenan, pisau, dll)
- 2. 📝 Langkah-langkah — nomor, ringkas, jelas (potong, tumis, masak, dll)
- 3. 🍽️ Saran penyajian — tips plating/sajian singkat
-
- Format per meal:
- --- Nama Meal ---
- 🍳 Peralatan: ...
- 📝 Langkah:
- 1. ...
- 2. ...
- 🍽️ Sajian: ...
-
- Bahasa Indonesia, tanpa disclaimer, format Telegram (baris pendek).`
-    : `You are a practical cook. From the given meal plan, create cooking instructions for EACH meal:
-
- For each meal, show:
- 1. 🍳 Utensils — list cooking tools needed (pan, pot, cutting board, knife, etc)
- 2. 📝 Steps — numbered, concise, clear (chop, saute, cook, etc)
- 3. 🍽️ Serving — brief plating/serving tips
-
- Format per meal:
- --- Meal Name ---
- 🍳 Utensils: ...
- 📝 Steps:
- 1. ...
- 2. ...
- 🍽️ Serving: ...
-
- Plain English, no disclaimers, Telegram format (short lines).`;
-  return callLLM(sys, planText, { temperature: 0.4, maxTokens: 8192 });
+export async function generateCookingSteps(planText: string, locale: 'en' | 'id' = 'en', chatId?: number): Promise<string> {
+  const sys = locale === 'id'
+    ? `Koki praktis. Buat panduan masak per meal: 🍳 Peralatan, 📝 Langkah (nomor), 🍽️ Sajian. Bahasa Indonesia, format Telegram.`
+    : `Practical cook. Create cooking instructions per meal: 🍳 Utensils, 📝 Steps (numbered), 🍽️ Serving. Plain text, short lines.`;
+  const result = await callLLM(sys, planText, { temperature: 0.4, maxTokens: 4096 });
+  await logUsageSafe(chatId, result.usage, 'cooking');
+  return result.content;
 }
 
 export async function regenerateMeal(
@@ -301,30 +279,15 @@ export async function regenerateMeal(
   mealName: string,
   locale: 'en' | 'id' = 'en',
   answers: Record<string, any> = {},
+  chatId?: number,
 ): Promise<string> {
   const sys = locale === 'id'
-    ? `Kamu asisten nutrisi. User mau ganti salah satu meal dari rencana makan mereka.
-Buat SATU pengganti untuk "${mealName}" yang:
-- Beda dari yang ada di rencana sekarang
-- Sesuai goal, alergi, dan pantangan user
-- Bahan tersedia di Indonesia
-- Sertakan kalori + protein perkiraan per meal
-- Format sama dengan meal lainnya di rencana
-
-Keluarin HANYA meal pengganti, bukan rencana lengkap. Tanpa preamble atau penjelasan.`
-    : `You are a nutrition assistant. The user wants to replace one meal from their plan.
-Generate ONE replacement for "${mealName}" that:
-- Is different from what's in the current plan
-- Matches the user's goal, allergies, and restrictions
-- Uses ingredients available in Indonesia
-- Includes estimated calories + protein per meal
-- Matches the format of other meals in the plan
-
-Output ONLY the replacement meal, not the full plan. No preamble or explanation.`;
-
-  const user = `Current full plan:\n${planText}\n\nUser goal: ${answers.goal || 'general health'}\nAllergies: ${answers.allergies || 'none'}\nRestrictions: ${answers.restrictions || 'none'}\nCalorie target: ${answers.calories || 'default'}\nProtein target: ${answers.protein || 'default'}\n\nReplace ONLY "${mealName}" with something different.`;
-
-  return callLLM(sys, user, { temperature: 0.85, maxTokens: 2048 });
+    ? `Asisten nutrisi. Ganti "${mealName}" dengan yang beda. Sesuai goal/alergi, bahan Indonesia, sertakan kalori+protein. Output HANYA meal pengganti.`
+    : `Nutrition assistant. Replace "${mealName}" with something different. Match goal/allergies, Indonesian ingredients, include calories+protein. Output ONLY the replacement meal.`;
+  const user = `Current plan:\n${planText}\n\nGoal: ${answers.goal || 'general'}\nAllergies: ${answers.allergies || 'none'}\nRestrictions: ${answers.restrictions || 'none'}\n\nReplace ONLY "${mealName}".`;
+  const result = await callLLM(sys, user, { temperature: 0.85, maxTokens: 2048 });
+  await logUsageSafe(chatId, result.usage, 'regenerate-meal');
+  return result.content;
 }
 
 export function parseCuisine(planText: string): string | null {

@@ -2,14 +2,14 @@ import 'dotenv/config';
 import { Telegraf, session, Markup } from 'telegraf';
 import {
     generateMealPlan, generateShoppingList, generateMacros, parseCuisine,
-    generateWeeklyPlan, generateCookingSteps,
+    generateWeeklyPlan, generateCookingSteps, setUsageCallback,
 } from './llmClient.js';
 import {
     saveUser, getUser, ensureUser, setSubscribed, getSubscribedUsers,
     setLastPushed, setLocale, bumpStreak, resetStreak,
     setLastAnswers, setLastCuisines, setLastFeedback, setPushTime,
     savePlan, getPlans, getPlan, deletePlan, closePool, migrateSchema,
-    pgSessionStore, checkRateLimit, incrementPlanCount,
+    pgSessionStore, checkRateLimit, incrementPlanCount, logUsage,
     createReferral, getReferralCount,
     getUserByTelegramChatId,
 } from './store.js';
@@ -369,7 +369,7 @@ async function generateAndSend(ctx: any, answers: Record<string, any>, opts: { r
     try {
         const plan = await generateMealPlan(answers as Answers, {
             locale, avoidCuisines, regenerate: opts.regenerate,
-        });
+        }, chatId);
         // Store plan text in session so shop/macros/cook can reuse it — no second LLM call
         if (ctx.session) ctx.session.lastPlanText = plan;
         await sendLong((txt) => ctx.reply(txt), plan);
@@ -611,7 +611,7 @@ bot.command('weekly', async (ctx: any) => {
     try {
         const plan = await generateWeeklyPlan(user.lastAnswers, {
             locale, avoidCuisines: user.lastCuisines || [],
-        });
+        }, ctx.chat.id);
         await sendLong((txt) => ctx.reply(txt), plan);
     } catch (err: any) {
         console.error('Weekly plan failed:', err);
@@ -881,15 +881,15 @@ bot.on('callback_query', async (ctx: any) => {
             try {
                 // Reuse plan from session if available — avoids a second LLM call
                 const plan = ctx.session?.lastPlanText
-                    ?? await generateMealPlan(last, { locale, avoidCuisines: user?.lastCuisines || [] });
+                    ?? await generateMealPlan(last, { locale, avoidCuisines: user?.lastCuisines || [] }, chatId);
                 if (action === 'shop') {
-                    const shop = await generateShoppingList(plan, locale);
+                    const shop = await generateShoppingList(plan, locale, chatId);
                     await sendLong((txt) => ctx.reply(txt), shop);
                 } else if (action === 'cook') {
-                    const steps = await generateCookingSteps(plan, locale);
+                    const steps = await generateCookingSteps(plan, locale, chatId);
                     await sendLong((txt) => ctx.reply(txt), steps);
                 } else {
-                    const macros = await generateMacros(plan, locale);
+                    const macros = await generateMacros(plan, locale, chatId);
                     await sendLong((txt) => ctx.reply(txt), macros);
                 }
             } catch (err: any) {
@@ -1085,7 +1085,7 @@ async function pushDailyPlans(): Promise<void> {
             const plan = await generateMealPlan(sub.answers, {
                 locale: sub.locale,
                 avoidCuisines: sub.lastCuisines,
-            });
+            }, sub.chatId);
             await deliverPlan(deliveryAdapters, sub.chatId, plan);
             await bumpStreak(sub.chatId);
             await setLastPushed(sub.chatId, today);
@@ -1114,6 +1114,7 @@ setInterval(() => { pushDailyPlans(); }, 60_000);
 // ────────────────────────────────────────────────────────────────────────────
 async function main() {
     await migrateSchema();
+    setUsageCallback(logUsage);
 
     await bot.telegram.setMyCommands([
         { command: 'mealplan', description: 'Build a new meal plan' },

@@ -153,8 +153,8 @@
       </div>
       <div class="preview-section">
         <div class="stats-preview">
-          <StatCard value={42} label="Users" icon="👥" />
-          <StatCard value={7} label="Day Streak" icon="🔥" />
+          <StatCard value={42} label="Users" />
+          <StatCard value={7} label="Day Streak" />
         </div>
       </div>
       <div class="preview-section">

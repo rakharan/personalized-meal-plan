@@ -15,12 +15,12 @@
   } = $props();
 
   const navItems = [
-    { href: '#/admin', icon: '📊', label: 'Dashboard' },
-    { href: '#/admin/users', icon: '👥', label: 'Pengguna' },
-    { href: '#/admin/plans', icon: '📋', label: 'Rencana' },
-    { href: '#/admin/feedback', icon: '👍', label: 'Feedback' },
-    { href: '#/admin/usage', icon: '📈', label: 'Usage' },
-    { href: '#/admin/referrals', icon: '🔗', label: 'Referral' },
+    { href: '#/admin', label: 'Dashboard' },
+    { href: '#/admin/users', label: 'Pengguna' },
+    { href: '#/admin/plans', label: 'Rencana' },
+    { href: '#/admin/feedback', label: 'Feedback' },
+    { href: '#/admin/usage', label: 'Usage' },
+    { href: '#/admin/referrals', label: 'Referral' },
   ];
 
   let mode = $state(theme.mode);
@@ -43,14 +43,14 @@
 
 <div class="shell">
   <Sidebar items={navItems} current={current || '#/admin'} brand="Saji">
-    <a href="#/"><span class="icon">🌐</span> Lihat Situs</a>
-    <a href="#/workshop"><span class="icon">🎨</span> Workshop</a>
-    <a href="#/theme-editor"><span class="icon">⚙️</span> Theme Editor</a>
+    <a href="#/">Lihat Situs</a>
+    <a href="#/workshop">Workshop</a>
+    <a href="#/theme-editor">Theme Editor</a>
     <button class="theme-toggle" onclick={cycleTheme}>
-      <span class="icon">{mode === 'dark' ? '🌙' : mode === 'light' ? '☀️' : '🖥️'}</span> {mode}
+      {mode}
     </button>
     <button class="theme-toggle" onclick={logout}>
-      <span class="icon">🚪</span> Logout
+      Logout
     </button>
   </Sidebar>
   <main class="main" id="main">
