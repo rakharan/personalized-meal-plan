@@ -4,3 +4,6 @@ dist
 mealplan.db
 mealplan.db-shm
 mealplan.db-wal
+web/dist
+web/node_modules
+.superdesign

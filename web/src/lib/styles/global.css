@@ -1,0 +1,79 @@
+/* Saji — global styles
+   Imports design tokens + resets + base typography.
+   Warm Kitchen: subtle texture, organic shapes, food warmth.
+*/
+
+@import "./tokens.css";
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scrollbar-gutter: stable;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: var(--fs-sm);
+  /* Warm Kitchen texture — subtle radial gradient overlay like ceramic glaze */
+  background-image:
+    radial-gradient(ellipse at 15% 10%, var(--primary-soft) 0%, transparent 35%),
+    radial-gradient(ellipse at 85% 90%, var(--accent-soft) 0%, transparent 35%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Custom scrollbar — Warm Kitchen */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: var(--radius-pill); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color var(--duration-micro) var(--ease-standard);
+}
+a:hover {
+  color: var(--primary-hover);
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input, textarea, select {
+  font-family: inherit;
+}
+
+/* Tabular numerals on all numeric content */
+table, .stat-num, .bar-row .val {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

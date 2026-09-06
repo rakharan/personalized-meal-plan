@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Telegraf, session, Markup } from 'telegraf';
 import {
     generateMealPlan, generateShoppingList, generateMacros, parseCuisine,
-    generateWeeklyPlan,
+    generateWeeklyPlan, generateCookingSteps,
 } from './llmClient.js';
 import {
     saveUser, getUser, ensureUser, setSubscribed, getSubscribedUsers,
@@ -11,6 +11,7 @@ import {
     savePlan, getPlans, getPlan, deletePlan, closePool, migrateSchema,
     pgSessionStore, checkRateLimit, incrementPlanCount,
     createReferral, getReferralCount,
+    getUserByTelegramChatId,
 } from './store.js';
 import type { Answers, User } from './store.js';
 import {
@@ -40,6 +41,7 @@ interface SessionState {
     awaitingTime?: boolean;
     awaitingPlanName?: boolean;
     editingField?: string;
+    lastPlanText?: string;
 }
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -61,16 +63,16 @@ const deliveryAdapters = createDeliveryManager(bot.telegram);
 // ────────────────────────────────────────────────────────────────────────────
 const I18N: Record<string, Record<Locale, string | ((...args: any[]) => string)>> = {
     start: {
-        en: (name: string) => `Hey${name ? ` ${name}` : ''}! I'll build you a daily meal plan with a local LLM. Tap a button below to get started.`,
-        id: (name: string) => `Halo${name ? ` ${name}` : ''}! Aku akan membuatkan rencana makan harian dengan LLM lokal. Ketuk tombol di bawah untuk mulai.`,
+        en: (name: string) => `Hey${name ? ` ${name}` : ''}! I'm Saji 🍽️. I'll help you eat well every day with ingredients you can actually find. Tap below to start.`,
+        id: (name: string) => `Halo${name ? ` ${name}` : ''}! Aku Saji 🍽️. Bakal bantu kamu makan enak + sehat setiap hari, pakai bahan yang gampang cari di Indonesia. Ketuk di bawah untuk mulai.`,
     },
     start_plan: { en: '🍱 Start /mealplan', id: '🍱 Mulai /mealplan' },
     start_lang: { en: '🌐 Set language', id: '🌐 Ganti bahasa' },
     start_help: { en: '❓ How it works', id: '❓ Cara kerja' },
 
     help: {
-        en: 'How it works:\n1. /mealplan — answer a few questions (tap buttons)\n2. Preview your answers, then Generate\n3. Get a meal plan with calories + protein\n4. 🛒 Shopping list or 📊 Macros buttons\n5. 🎲 Regenerate for a different plan\n6. /subscribe to get a fresh plan daily',
-        id: 'Cara kerja:\n1. /mealplan — jawab beberapa pertanyaan (ketuk tombol)\n2. Pratinjau jawabanmu, lalu Generate\n3. Dapat rencana makan + kalori + protein\n4. Tombol 🛒 Daftar belanja atau 📊 Makro\n5. 🎲 Regenerasi untuk rencana berbeda\n6. /subscribe untuk rencana harian otomatis',
+        en: 'How it works:\n1. /mealplan — answer a few questions (tap buttons)\n2. Preview, then Generate\n3. Get a meal plan with calories + protein\n4. 🛒 Shopping list or 📊 Macros\n5. 🎲 Regenerate for a different plan\n6. /subscribe for a fresh plan daily',
+        id: 'Cara kerja:\n1. /mealplan — jawab beberapa pertanyaan (ketuk tombol)\n2. Pratinjau, lalu Buat\n3. Dapat rencana makan + kalori + protein\n4. Tombol 🛒 Daftar belanja atau 📊 Makro\n5. 🎲 Regenerasi untuk rencana berbeda\n6. /subscribe untuk rencana harian otomatis',
     },
 
     goal: { en: "What's your main goal?", id: 'Apa tujuan utama kamu?' },
@@ -83,33 +85,34 @@ const I18N: Record<string, Record<Locale, string | ((...args: any[]) => string)>
         en: 'Cuisine preference? (rotate daily, or pick one — ingredients available in Indonesia)',
         id: 'Preferensi masakan? (putar harian, atau pilih satu — bahan tersedia di Indonesia)',
     },
-    done: { en: "Got it — generating your meal plan, hang on...", id: "Sip — sedang membuat rencana makan, tunggu sebentar..." },
+    done: { en: "Sip — generating your meal plan, hang on...", id: "Sip — sedang bikin rencana makan kamu, tunggu sebentar..." },
     back: { en: '◀️ Back', id: '◀️ Kembali' },
     other: { en: '✏️ Other (type)', id: '✏️ Lain (ketik)' },
     skip: { en: '⏭ Skip', id: '⏭ Skip' },
     none: { en: 'None', id: 'Tidak ada' },
 
     preview: { en: '📋 Here are your answers. Generate?', id: '📋 Ini jawabanmu. Buat rencana?' },
-    confirm_generate: { en: '✅ Generate', id: '✅ Buat' },
+    confirm_generate: { en: '✅ Generate', id: '✅ Buat dong!' },
     confirm_edit: { en: '✏️ Edit', id: '✏️ Ubah' },
     confirm_cancel: { en: '❌ Cancel', id: '❌ Batal' },
 
     reroll: { en: '🎲 Regenerate', id: '🎲 Regenerasi' },
     shop: { en: '🛒 Shopping list', id: '🛒 Daftar belanja' },
     macros: { en: '📊 Macros', id: '📊 Makro' },
+    cook: { en: '🍳 Cook', id: '🍳 Masak' },
     good: { en: '👍 Good', id: '👍 Bagus' },
     bad: { en: '👎 Try again', id: '👎 Ulangi' },
 
     subscribed: {
-        en: (h: string, m: string) => `Subscribed! A fresh plan will be pushed daily at ${h}:${m}. /settime to change, /unsubscribe to stop.`,
-        id: (h: string, m: string) => `Berlangganan! Rencana baru dikirim harian pukul ${h}:${m}. /settime ubah, /unsubscribe berhenti.`,
+        en: (h: string, m: string) => `You're in! A fresh plan will arrive daily at ${h}:${m}. /settime to change, /unsubscribe to stop.`,
+        id: (h: string, m: string) => `Mantap, kamu langganan! Rencana baru dikirim harian pukul ${h}:${m}. /settime ubah, /unsubscribe berhenti.`,
     },
-    unsubscribed: { en: 'Unsubscribed. /subscribe to resume.', id: 'Berhenti berlangganan. /subscribe lanjut.' },
-    not_subscribed: { en: 'Not subscribed', id: 'Tidak berlangganan' },
+    unsubscribed: { en: 'Paused. /subscribe to resume anytime.', id: 'Berhenti langganan. /subscribe untuk lanjut kapan saja.' },
+    not_subscribed: { en: 'Not subscribed', id: 'Belum langganan' },
     subscribed_state: { en: 'Subscribed', id: 'Berlangganan' },
     need_mealplan: {
-        en: "You haven't completed /mealplan yet. Do that first.",
-        id: "Kamu belum menyelesaikan /mealplan. Selesaikan dulu.",
+        en: "You haven't done /mealplan yet. Let's fix that first!",
+        id: "Kamu belum selesai /mealplan. Yuk selesaikan dulu!",
     },
     settime_pick: {
         en: 'Pick your daily push time (tap a slot):',
@@ -153,6 +156,7 @@ const I18N: Record<string, Record<Locale, string | ((...args: any[]) => string)>
     idle: { en: 'Send /mealplan to build a new plan.', id: 'Ketik /mealplan untuk buat rencana baru.' },
     edit_pick: { en: 'Which answer to edit?', id: 'Ubah jawaban mana?' },
     generating: { en: 'Generating...', id: 'Membuat...' },
+    cooking_done: { en: 'Cooking up instructions...', id: 'Bikin panduan masak...' },
     shopping_done: { en: 'Generating shopping list...', id: 'Membuat daftar belanja...' },
     macros_done: { en: 'Computing macros...', id: 'Menghitung makro...' },
     err: {
@@ -160,41 +164,41 @@ const I18N: Record<string, Record<Locale, string | ((...args: any[]) => string)>
         id: (m: string) => `Gagal membuat: ${m}. Coba /mealplan lagi.`,
     },
     streak_msg: {
-        en: (n: number) => n > 0 ? `🔥 Day ${n} streak!` : '',
-        id: (n: number) => n > 0 ? `🔥 Hari ke-${n} beruntun!` : '',
+        en: (n: number) => n > 0 ? `🔥 Day ${n} streak! Keep it up!` : '',
+        id: (n: number) => n > 0 ? `🔥 Hari ke-${n} kamu konsisten! Mantap!` : '',
     },
     missed: {
-        en: 'Missed yesterday? /mealplan to restart your streak.',
-        id: 'Ketinggalan kemarin? /mealplan untuk mulai lagi.',
+        en: 'Missed yesterday? No worries. /mealplan to restart your streak.',
+        id: 'Ketinggalan kemarin? Nggak masalah. /mealplan untuk mulai lagi.',
     },
     rate_limited: {
-        en: (limit: number) => `Daily limit reached (${limit} plans/day). Resets tomorrow.`,
-        id: (limit: number) => `Batas harian tercapai (${limit} rencana/hari). Reset besok.`,
+        en: (limit: number) => `Daily limit reached (${limit} plans/day). Resets tomorrow. Gas lagi besok!`,
+        id: (limit: number) => `Batas harian tercapai (${limit} rencana/hari). Reset besok. Gas lagi besok ya!`,
     },
-    weekly_done: { en: 'Generating weekly plan...', id: 'Membuat rencana mingguan...' },
+    weekly_done: { en: 'Cooking up your 7-day plan...', id: 'Bikin rencana 7 hari nih...' },
     invite_msg: {
-        en: (link: string) => `Invite friends:\n${link}`,
-        id: (link: string) => `Ajak teman:\n${link}`,
+        en: (link: string) => `Share Saji with friends:\n${link}`,
+        id: (link: string) => `Ajak teman pakai Saji:\n${link}`,
     },
     invite_count: {
         en: (n: number) => `You've invited ${n} friend(s).`,
-        id: (n: number) => `Kamu telah mengajak ${n} teman.`,
+        id: (n: number) => `Kamu udah ajak ${n} teman.`,
     },
     onboarding: {
         en: 'Welcome! I make daily meal plans from your preferences — calories, protein, cuisine. Takes 30 seconds. Tap Start below.',
-        id: 'Selamat datang! Aku buat rencana makan harian dari preferensimu — kalori, protein, masakan. 30 detik. Ketuk Mulai.',
+        id: 'Selamat datang! Aku bikin rencana makan harian dari preferensimu — kalori, protein, masakan. Cuma 30 detik. Ketuk Mulai di bawah.',
     },
     invalid_input: {
-        en: 'Invalid input. Try again.',
-        id: 'Input tidak valid. Coba lagi.',
+        en: "Hmm, that doesn't look right. Try again?",
+        id: 'Hmm, kayaknya nggak tepat. Coba lagi?',
     },
     invalid_calories: {
-        en: 'Calories must be 800–5000. Try again.',
-        id: 'Kalori harus 800–5000. Coba lagi.',
+        en: 'Calories must be 800–5000. Try again?',
+        id: 'Kalori harus 800–5000. Coba lagi?',
     },
     invalid_protein: {
-        en: 'Protein must be 20–500g. Try again.',
-        id: 'Protein harus 20–500g. Coba lagi.',
+        en: 'Protein must be 20–500g. Try again?',
+        id: 'Protein harus 20–500g. Coba lagi?',
     },
 };
 
@@ -315,6 +319,7 @@ function planActionKeyboard(locale: string) {
         [
             { text: t(locale, 'shop'), callback_data: 'action_shop' },
             { text: t(locale, 'macros'), callback_data: 'action_macros' },
+            { text: t(locale, 'cook'), callback_data: 'action_cook' },
         ],
         [
             { text: t(locale, 'good'), callback_data: 'action_good' },
@@ -365,6 +370,8 @@ async function generateAndSend(ctx: any, answers: Record<string, any>, opts: { r
         const plan = await generateMealPlan(answers as Answers, {
             locale, avoidCuisines, regenerate: opts.regenerate,
         });
+        // Store plan text in session so shop/macros/cook can reuse it — no second LLM call
+        if (ctx.session) ctx.session.lastPlanText = plan;
         await sendLong((txt) => ctx.reply(txt), plan);
 
         if (chatId) {
@@ -405,12 +412,84 @@ async function generateAndSend(ctx: any, answers: Record<string, any>, opts: { r
 // ────────────────────────────────────────────────────────────────────────────
 bot.start(async (ctx: any) => {
     const locale: Locale = ctx.from?.language_code === 'id' ? 'id' : 'en';
+    const payload = ctx.message?.text?.split(' ')[1] || '';
+
+    // ── Link account: /start link_<token> ──
+    const linkMatch = payload.match(/^link_(.+)$/);
+    if (linkMatch) {
+        const token = linkMatch[1];
+        const apiToken = process.env.ADMIN_TOKEN || 'changeme';
+        try {
+            const res = await fetch(`http://localhost:${process.env.DASHBOARD_PORT || 3000}/api/bot/consume-link`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiToken}` },
+                body: JSON.stringify({ token, chat_id: ctx.chat.id }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.linked && data.user) {
+                    await ensureUser(ctx.chat.id, locale);
+                    ctx.session = freshSession();
+                    ctx.session.locale = locale;
+                    const name = data.user.full_name || ctx.from?.first_name || '';
+                    await ctx.reply(
+                        `✅ Akun terhubung, ${name}! Aku udah punya profilmu.\n\n` +
+                        `Goal: ${data.user.goal || '—'}\n` +
+                        `Mau langsung generate rencana pertama?`,
+                        Markup.inlineKeyboard([
+                            [{ text: '✅ Gas! Buat rencana', callback_data: 'linked_generate' }],
+                        ])
+                    );
+                    return;
+                }
+            }
+        } catch (e) {
+            console.error('Link token consume failed:', e);
+        }
+        await ctx.reply('Hmm, link udah kedaluwarsa atau nggak valid. Coba hubungkan ulang dari Pengaturan web ya.');
+        return;
+    }
+
+    // ── Check if chat_id is linked to a web profile ──
+    const webProfile = await getUserByTelegramChatId(ctx.chat.id);
+    if (webProfile) {
+        // Linked user — skip questions, generate from profile
+        const user = await ensureUser(ctx.chat.id, locale);
+        ctx.session = freshSession();
+        ctx.session.locale = webProfile.locale as Locale || locale;
+
+        // Sync answers from web profile
+        const answers: Answers = {
+            goal: webProfile.goal || 'General health',
+            restrictions: webProfile.dietary_restrictions || '',
+            allergies: webProfile.allergies || '',
+            calories: webProfile.target_calories ? String(webProfile.target_calories) : '',
+            protein: webProfile.target_protein ? String(webProfile.target_protein) : '',
+            mealsPerDay: String(webProfile.meals_per_day || 3),
+            cuisine: webProfile.cuisine_rotation || 'Rotate daily',
+        };
+        await setLastAnswers(ctx.chat.id, answers);
+        ctx.session.answers = answers;
+
+        const name = webProfile.full_name || ctx.from?.first_name || '';
+        await ctx.reply(
+            `Halo ${name}! Aku Saji 🍽️\n` +
+            `Profilmu udah tersinkron dari web.\n` +
+            `Goal: ${answers.goal} · ${answers.calories || '—'} kal · ${answers.protein || '—'}g protein\n\n` +
+            `Mau generate rencana makan?`,
+            Markup.inlineKeyboard([
+                [{ text: '✅ Gas! Buat rencana', callback_data: 'linked_generate' }],
+                [{ text: '📊 Lihat profil', callback_data: 'cmd_help' }],
+            ])
+        );
+        return;
+    }
+
+    // ── Referral: /start ref_<referrerChatId> ──
     const user = await ensureUser(ctx.chat.id, locale);
     ctx.session = freshSession();
     ctx.session.locale = user.locale || locale;
 
-    // Parse referral param: /start ref_<referrerChatId>
-    const payload = ctx.message?.text?.split(' ')[1] || '';
     const refMatch = payload.match(/^ref_(\d+)$/);
     if (refMatch) {
         const referrerId = Number(refMatch[1]);
@@ -552,9 +631,11 @@ bot.command('invite', async (ctx: any) => {
 bot.command('help', async (ctx: any) => {
     const locale = getLocale(ctx);
     const lines = locale === 'id' ? [
+        '🍽️ Saji — Asisten Makan Harian',
+        '',
         '📚 Perintah tersedia:',
         '',
-        '/mealplan — buat rencana makan baru (jawab pertanyaan)',
+        '/mealplan — buat rencana makan baru',
         '/subscribe — langganan rencana harian otomatis',
         '/unsubscribe — berhenti langganan',
         '/settime — ubah jam kirim harian',
@@ -564,16 +645,18 @@ bot.command('help', async (ctx: any) => {
         '/plans — lihat rencana tersimpan',
         '/save <nama> — simpan rencana saat ini',
         '/weekly — buat rencana 7 hari',
-        '/invite — link referral teman',
+        '/invite — link ajak teman',
         '/help — tampilkan bantuan ini',
         '',
-        '💡 Setelah rencana dibuat, ada tombol: 🎲 Regenerasi, ✏️ Ubah, 💾 Simpan, 🛒 Daftar belanja, 📊 Makro, 👍/👎',
+        '💡 Setelah rencana dibuat, ada tombol: 🎲 Regenerasi, ✏️ Ubah, 💾 Simpan, 🛒 Belanja, 📊 Makro, 👍/👎',
     ] : [
+        '🍽️ Saji — Daily Meal Plan Assistant',
+        '',
         '📚 Available commands:',
         '',
-        '/mealplan — build a new meal plan (answer questions)',
-        '/subscribe — get a fresh plan pushed daily',
-        '/unsubscribe — stop daily push',
+        '/mealplan — build a new meal plan',
+        '/subscribe — get a fresh plan daily',
+        '/unsubscribe — pause daily push',
         '/settime — change your daily push time',
         '/status — check subscription status',
         '/lang — switch language (EN/ID)',
@@ -629,6 +712,30 @@ bot.on('callback_query', async (ctx: any) => {
     }
 
     // ── Start menu shortcuts ──
+    if (data === 'linked_generate') {
+        // Linked web user — generate from profile, skip questions
+        const webProfile = await getUserByTelegramChatId(ctx.chat.id);
+        if (!webProfile) {
+            await ctx.reply('Hmm, profil web kamu nggak ketemu. Coba hubungkan ulang dari Pengaturan web ya.');
+            return;
+        }
+        const answers: Answers = {
+            goal: webProfile.goal || 'General health',
+            restrictions: webProfile.dietary_restrictions || '',
+            allergies: webProfile.allergies || '',
+            calories: webProfile.target_calories ? String(webProfile.target_calories) : '',
+            protein: webProfile.target_protein ? String(webProfile.target_protein) : '',
+            mealsPerDay: String(webProfile.meals_per_day || 3),
+            cuisine: webProfile.cuisine_rotation || 'Rotate daily',
+        };
+        await setLastAnswers(ctx.chat.id, answers);
+        ctx.session.answers = answers;
+        ctx.session.step = 'idle';
+        await ctx.reply(t(locale, 'done'));
+        await generateAndSend(ctx, answers);
+        return;
+    }
+
     if (data === 'cmd_mealplan') {
         const user = await ensureUser(ctx.chat.id, getLocale(ctx));
         ctx.session = { step: 'goal', answers: {}, history: [], locale: user.locale };
@@ -747,7 +854,7 @@ bot.on('callback_query', async (ctx: any) => {
         }
         if (action === 'good') {
             await setLastFeedback(chatId, 'good');
-            await ctx.reply(locale === 'id' ? '👍 Terima kasih!' : '👍 Thanks!');
+            await ctx.reply(locale === 'id' ? '👍 Makasih! Senang kamu suka!' : '👍 Thanks! Glad you liked it!');
             return;
         }
         if (action === 'bad') {
@@ -761,19 +868,26 @@ bot.on('callback_query', async (ctx: any) => {
             await generateAndSend(ctx, last, { regenerate: true });
             return;
         }
-        if (action === 'shop' || action === 'macros') {
+        if (action === 'shop' || action === 'macros' || action === 'cook') {
             const last = user?.lastAnswers;
             if (!last) {
                 await ctx.reply(t(locale, 'need_mealplan'));
                 return;
             }
-            const waitMsg = action === 'shop' ? t(locale, 'shopping_done') : t(locale, 'macros_done');
+            const waitMsg = action === 'shop' ? t(locale, 'shopping_done')
+                : action === 'cook' ? t(locale, 'cooking_done')
+                : t(locale, 'macros_done');
             await ctx.reply(waitMsg);
             try {
-                const plan = await generateMealPlan(last, { locale, avoidCuisines: user?.lastCuisines || [] });
+                // Reuse plan from session if available — avoids a second LLM call
+                const plan = ctx.session?.lastPlanText
+                    ?? await generateMealPlan(last, { locale, avoidCuisines: user?.lastCuisines || [] });
                 if (action === 'shop') {
                     const shop = await generateShoppingList(plan, locale);
                     await sendLong((txt) => ctx.reply(txt), shop);
+                } else if (action === 'cook') {
+                    const steps = await generateCookingSteps(plan, locale);
+                    await sendLong((txt) => ctx.reply(txt), steps);
                 } else {
                     const macros = await generateMacros(plan, locale);
                     await sendLong((txt) => ctx.reply(txt), macros);

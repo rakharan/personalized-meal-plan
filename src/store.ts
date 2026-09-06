@@ -134,20 +134,113 @@ export async function migrateSchema(): Promise<void> {
   `);
 
   // Add columns that may be missing on older DBs
-  const cols = new Set(
-    (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'subscribers'")).rows
+    const cols = new Set(
+      (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'subscribers'")).rows
+        .map((r: any) => r.column_name)
+    );
+    const migrations: [string, string][] = [
+      ['tier', "TEXT NOT NULL DEFAULT 'free'"],
+      ['referred_by', 'BIGINT'],
+      ['daily_plan_count', 'INTEGER NOT NULL DEFAULT 0'],
+      ['daily_reset_date', 'TEXT'],
+      ['created_at', "TIMESTAMPTZ NOT NULL DEFAULT NOW()"],
+    ];
+    for (const [col, def] of migrations) {
+      if (!cols.has(col)) {
+        await pool.query(`ALTER TABLE subscribers ADD COLUMN ${col} ${def};`);
+      }
+    }
+
+    // ── User profiles (web accounts) ──
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_profiles (
+        id                  SERIAL PRIMARY KEY,
+        email               TEXT UNIQUE NOT NULL,
+        password_hash       TEXT NOT NULL,
+        full_name           TEXT NOT NULL,
+        age                 INTEGER,
+        gender              TEXT,
+        height_cm           INTEGER,
+        weight_kg           REAL,
+        activity_level      TEXT DEFAULT 'moderate',
+        cooking_skill       TEXT DEFAULT 'beginner',
+        household_size      INTEGER DEFAULT 1,
+        has_children        INTEGER DEFAULT 0,
+        budget_tier         TEXT DEFAULT 'moderate',
+        health_conditions   TEXT,
+        allergies           TEXT,
+        dietary_restrictions TEXT,
+        goal                TEXT,
+        target_calories     INTEGER,
+        target_protein      INTEGER,
+        cuisine_rotation    TEXT DEFAULT 'rotate',
+        meals_per_day       INTEGER DEFAULT 3,
+        disliked_ingredients TEXT,
+        delivery_channel    TEXT DEFAULT 'telegram',
+        telegram_chat_id    BIGINT,
+        whatsapp_phone      TEXT,
+        whatsapp_verified   INTEGER DEFAULT 0,
+        locale              TEXT DEFAULT 'id',
+        push_hour           INTEGER,
+        push_min            INTEGER,
+        subscribed          INTEGER DEFAULT 0,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON user_profiles(email);');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_user_profiles_tg ON user_profiles(telegram_chat_id) WHERE telegram_chat_id IS NOT NULL;');
+
+    // ── Meal plan history (generated plans stored for web users) ──
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS meal_plan_history (
+        id              SERIAL PRIMARY KEY,
+        user_id         INTEGER NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+        plan_text      TEXT NOT NULL,
+        cuisine        TEXT,
+        calories_total INTEGER,
+        protein_total  INTEGER,
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_meal_plan_history_user ON meal_plan_history(user_id);');
+
+    // ── Telegram link tokens (temporary, for connecting bot to web account) ──
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS telegram_link_tokens (
+        token       TEXT PRIMARY KEY,
+        user_id     INTEGER NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        used_at     TIMESTAMPTZ
+      );
+    `);
+
+    // ── WhatsApp OTP codes ──
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS whatsapp_otps (
+        id          SERIAL PRIMARY KEY,
+        phone       TEXT NOT NULL,
+        code        TEXT NOT NULL,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        verified    INTEGER DEFAULT 0,
+        attempts    INTEGER DEFAULT 0
+      );
+    `);
+    await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_otps_phone ON whatsapp_otps(phone);');
+
+  // Add new columns to user_profiles if missing (for existing tables)
+  const profileCols = new Set(
+    (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'user_profiles'")).rows
       .map((r: any) => r.column_name)
   );
-  const migrations: [string, string][] = [
-    ['tier', "TEXT NOT NULL DEFAULT 'free'"],
-    ['referred_by', 'BIGINT'],
-    ['daily_plan_count', 'INTEGER NOT NULL DEFAULT 0'],
-    ['daily_reset_date', 'TEXT'],
-    ['created_at', "TIMESTAMPTZ NOT NULL DEFAULT NOW()"],
+  const profileMigrations: [string, string][] = [
+    ['push_hour', 'INTEGER'],
+    ['push_min', 'INTEGER'],
+    ['subscribed', 'INTEGER DEFAULT 0'],
   ];
-  for (const [col, def] of migrations) {
-    if (!cols.has(col)) {
-      await pool.query(`ALTER TABLE subscribers ADD COLUMN ${col} ${def};`);
+  for (const [col, def] of profileMigrations) {
+    if (!profileCols.has(col)) {
+      await pool.query(`ALTER TABLE user_profiles ADD COLUMN ${col} ${def};`);
     }
   }
 }
@@ -423,4 +516,253 @@ export async function getReferralCount(referrerId: number): Promise<number> {
 export async function getReferrals(referrerId: number): Promise<{ referredId: number; created: string }[]> {
   const { rows } = await pool.query('SELECT referred_id, created FROM referrals WHERE referrer_id = $1 ORDER BY created DESC', [referrerId]);
   return rows.map((r: any) => ({ referredId: Number(r.referred_id), created: r.created.toISOString() }));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// User profiles (web accounts)
+// ════════════════════════════════════════════════════════════════════════════
+export interface UserProfile {
+  id: number;
+  email: string;
+  full_name: string;
+  age: number | null;
+  gender: string | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  activity_level: string;
+  cooking_skill: string;
+  household_size: number;
+  has_children: boolean;
+  budget_tier: string;
+  health_conditions: string | null;
+  allergies: string | null;
+  dietary_restrictions: string | null;
+  goal: string | null;
+  target_calories: number | null;
+  target_protein: number | null;
+  cuisine_rotation: string;
+  meals_per_day: number;
+  disliked_ingredients: string | null;
+  delivery_channel: string;
+  telegram_chat_id: number | null;
+  whatsapp_phone: string | null;
+  whatsapp_verified: boolean;
+  locale: string;
+  push_hour: number | null;
+  push_min: number | null;
+  subscribed: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface UserProfileRow {
+  id: number;
+  email: string;
+  full_name: string;
+  age: number | null;
+  gender: string | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  activity_level: string;
+  cooking_skill: string;
+  household_size: number;
+  has_children: number;
+  budget_tier: string;
+  health_conditions: string | null;
+  allergies: string | null;
+  dietary_restrictions: string | null;
+  goal: string | null;
+  target_calories: number | null;
+  target_protein: number | null;
+  cuisine_rotation: string;
+  meals_per_day: number;
+  disliked_ingredients: string | null;
+  delivery_channel: string;
+  telegram_chat_id: string | null;
+  whatsapp_phone: string | null;
+  whatsapp_verified: number;
+  locale: string;
+  push_hour: number | null;
+  push_min: number | null;
+  subscribed: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+function rowToProfile(row: UserProfileRow): UserProfile {
+  return {
+    id: row.id,
+    email: row.email,
+    full_name: row.full_name,
+    age: row.age,
+    gender: row.gender,
+    height_cm: row.height_cm,
+    weight_kg: row.weight_kg,
+    activity_level: row.activity_level,
+    cooking_skill: row.cooking_skill,
+    household_size: row.household_size,
+    has_children: !!row.has_children,
+    budget_tier: row.budget_tier,
+    health_conditions: row.health_conditions,
+    allergies: row.allergies,
+    dietary_restrictions: row.dietary_restrictions,
+    goal: row.goal,
+    target_calories: row.target_calories,
+    target_protein: row.target_protein,
+    cuisine_rotation: row.cuisine_rotation,
+    meals_per_day: row.meals_per_day,
+    disliked_ingredients: row.disliked_ingredients,
+    delivery_channel: row.delivery_channel,
+    telegram_chat_id: row.telegram_chat_id ? Number(row.telegram_chat_id) : null,
+    whatsapp_phone: row.whatsapp_phone,
+    whatsapp_verified: !!row.whatsapp_verified,
+    locale: row.locale,
+    push_hour: row.push_hour,
+    push_min: row.push_min,
+    subscribed: !!row.subscribed,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export async function createUserProfile(data: {
+  email: string;
+  password_hash: string;
+  full_name: string;
+  locale?: string;
+}): Promise<number> {
+  const { rows } = await pool.query(
+    `INSERT INTO user_profiles (email, password_hash, full_name, locale)
+     VALUES ($1, $2, $3, $4) RETURNING id`,
+    [data.email, data.password_hash, data.full_name, data.locale || 'id']
+  );
+  return rows[0].id;
+}
+
+export async function getUserByEmail(email: string): Promise<UserProfile | null> {
+  const { rows } = await pool.query('SELECT * FROM user_profiles WHERE email = $1', [email]);
+  return rows.length ? rowToProfile(rows[0] as UserProfileRow) : null;
+}
+
+export async function getUserById(id: number): Promise<UserProfile | null> {
+  const { rows } = await pool.query('SELECT * FROM user_profiles WHERE id = $1', [id]);
+  return rows.length ? rowToProfile(rows[0] as UserProfileRow) : null;
+}
+
+export async function getUserByTelegramChatId(chatId: number): Promise<UserProfile | null> {
+  const { rows } = await pool.query('SELECT * FROM user_profiles WHERE telegram_chat_id = $1', [chatId]);
+  return rows.length ? rowToProfile(rows[0] as UserProfileRow) : null;
+}
+
+export async function getSubscribedWebUsers(): Promise<UserProfile[]> {
+  const { rows } = await pool.query('SELECT * FROM user_profiles WHERE subscribed = 1');
+  return rows.map((r: UserProfileRow) => rowToProfile(r));
+}
+
+export async function updateUserProfile(id: number, fields: Record<string, any>): Promise<void> {
+  const allowed = [
+    'full_name', 'age', 'gender', 'height_cm', 'weight_kg', 'activity_level',
+    'cooking_skill', 'household_size', 'has_children', 'budget_tier',
+    'health_conditions', 'allergies', 'dietary_restrictions', 'goal',
+    'target_calories', 'target_protein', 'cuisine_rotation', 'meals_per_day',
+    'disliked_ingredients', 'delivery_channel', 'whatsapp_phone',
+    'whatsapp_verified', 'locale',
+    'push_hour', 'push_min', 'subscribed',
+  ];
+  const updates: string[] = [];
+  const values: any[] = [];
+  let idx = 1;
+  for (const [key, val] of Object.entries(fields)) {
+    if (!allowed.includes(key)) continue;
+    if (key === 'has_children') {
+      updates.push(`has_children = $${idx}`);
+      values.push(val ? 1 : 0);
+    } else if (key === 'whatsapp_verified' || key === 'subscribed') {
+      updates.push(`${key} = $${idx}`);
+      values.push(val ? 1 : 0);
+    } else {
+      updates.push(`${key} = $${idx}`);
+      values.push(val);
+    }
+    idx++;
+  }
+  if (updates.length === 0) return;
+  updates.push(`updated_at = NOW()`);
+  values.push(id);
+  await pool.query(`UPDATE user_profiles SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+}
+
+export async function linkTelegramAccount(userId: number, chatId: number): Promise<void> {
+  await pool.query('UPDATE user_profiles SET telegram_chat_id = $1, updated_at = NOW() WHERE id = $2', [chatId, userId]);
+}
+
+// ── Telegram link tokens ──
+export async function createTelegramLinkToken(userId: number): Promise<string> {
+  const token = crypto.randomUUID();
+  await pool.query('INSERT INTO telegram_link_tokens (token, user_id) VALUES ($1, $2)', [token, userId]);
+  return token;
+}
+
+export async function consumeTelegramLinkToken(token: string): Promise<number | null> {
+  const { rows } = await pool.query(
+    'SELECT user_id FROM telegram_link_tokens WHERE token = $1 AND used_at IS NULL AND created_at > NOW() - INTERVAL \'1 hour\'',
+    [token]
+  );
+  if (!rows.length) return null;
+  const userId = rows[0].user_id;
+  await pool.query('UPDATE telegram_link_tokens SET used_at = NOW() WHERE token = $1', [token]);
+  return userId;
+}
+
+// ── Meal plan history ──
+export async function savePlanHistory(userId: number, planText: string, cuisine: string | null, calories: number | null, protein: number | null): Promise<number> {
+  const { rows } = await pool.query(
+    'INSERT INTO meal_plan_history (user_id, plan_text, cuisine, calories_total, protein_total) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [userId, planText, cuisine, calories, protein]
+  );
+  return rows[0].id;
+}
+
+export async function getPlanHistory(userId: number, limit = 30): Promise<any[]> {
+  const { rows } = await pool.query(
+    'SELECT id, plan_text, cuisine, calories_total, protein_total, created_at FROM meal_plan_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+    [userId, limit]
+  );
+  return rows.map((r: any) => ({
+    id: r.id,
+    planText: r.plan_text,
+    cuisine: r.cuisine,
+    calories: r.calories_total,
+    protein: r.protein_total,
+    created: r.created_at.toISOString(),
+  }));
+}
+
+// ── WhatsApp OTP ──
+export async function saveWhatsAppOTP(phone: string, code: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO whatsapp_otps (phone, code) VALUES ($1, $2)
+     ON CONFLICT (phone) DO UPDATE SET code = $2, created_at = NOW(), verified = 0, attempts = 0`,
+    [phone, code]
+  );
+}
+
+export async function verifyWhatsAppOTP(phone: string, code: string): Promise<boolean> {
+  // Check attempts first — block after 5
+  const { rows: attemptRows } = await pool.query(
+    "SELECT attempts FROM whatsapp_otps WHERE phone = $1 AND verified = 0 AND created_at > NOW() - INTERVAL '10 minutes'",
+    [phone]
+  );
+  if (attemptRows.length && attemptRows[0].attempts >= 5) return false;
+
+  // Increment attempt counter
+  await pool.query('UPDATE whatsapp_otps SET attempts = attempts + 1 WHERE phone = $1', [phone]);
+
+  const { rows } = await pool.query(
+    "SELECT * FROM whatsapp_otps WHERE phone = $1 AND code = $2 AND verified = 0 AND created_at > NOW() - INTERVAL '10 minutes'",
+    [phone, code]
+  );
+  if (!rows.length) return false;
+  await pool.query('UPDATE whatsapp_otps SET verified = 1 WHERE phone = $1 AND code = $2', [phone, code]);
+  return true;
 }

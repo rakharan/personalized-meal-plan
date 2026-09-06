@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080">
+  <!-- Saji social post template — 1080x1080 square -->
+  <!-- Background -->
+  <rect width="1080" height="1080" fill="#1A1612"/>
+  <rect width="1080" height="1080" fill="#241F1B" opacity="0.5"/>
+
+  <!-- Decorative food icon plate -->
+  <circle cx="540" cy="350" r="120" fill="none" stroke="#52B788" stroke-width="3" opacity="0.3"/>
+  <circle cx="540" cy="350" r="80" fill="none" stroke="#F59E0B" stroke-width="2" opacity="0.3"/>
+
+  <!-- Brand -->
+  <text x="540" y="180" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="42" font-weight="700" fill="#E8E0D5" letter-spacing="-1">Saji</text>
+  <text x="540" y="220" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="20" font-weight="400" fill="#8A7E72">Asisten makan harian</text>
+
+  <!-- Main headline -->
+  <text x="540" y="560" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="64" font-weight="700" fill="#E8E0D5" letter-spacing="-2">
+    <tspan x="540" dy="0">Mau makan enak</tspan>
+    <tspan x="540" dy="76" fill="#52B788">hari ini?</tspan>
+  </text>
+
+  <!-- Subtitle -->
+  <text x="540" y="760" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="28" font-weight="400" fill="#C4B8A8">
+    <tspan x="540">Rencana makan harian dengan bahan</tspan>
+    <tspan x="540" dy="40">yang gampang cari di Indonesia</tspan>
+  </text>
+
+  <!-- CTA pill -->
+  <rect x="390" y="860" width="300" height="60" rx="30" fill="#52B788"/>
+  <text x="540" y="898" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="24" font-weight="600" fill="#1A1612">Mulai dong! →</text>
+
+  <!-- Bottom hashtags -->
+  <text x="540" y="1020" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="18" font-weight="400" fill="#5C5248">#makansehat #tempe #kangkung #indonesia</text>
+</svg>

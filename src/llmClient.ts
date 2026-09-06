@@ -10,6 +10,18 @@ export interface MealPlanOptions {
   locale?: 'en' | 'id';
   avoidCuisines?: string[];
   regenerate?: boolean;
+  profileContext?: {
+    age?: number | null;
+    gender?: string | null;
+    height_cm?: number | null;
+    weight_kg?: number | null;
+    activity_level?: string;
+    cooking_skill?: string;
+    household_size?: number;
+    budget_tier?: string;
+    health_conditions?: string | null;
+    disliked_ingredients?: string | null;
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -52,6 +64,22 @@ function buildUserPrompt(answers: Record<string, any>, opts: MealPlanOptions = {
     `Meals per day: ${mealsPerDay}`,
     `Cuisine preference: ${cuisine || 'no preference'}`,
   ];
+
+  // Enhanced profile context
+  if (opts.profileContext) {
+    const p = opts.profileContext;
+    if (p.age) lines.push(`Age: ${p.age}`);
+    if (p.gender) lines.push(`Gender: ${p.gender}`);
+    if (p.height_cm) lines.push(`Height: ${p.height_cm}cm`);
+    if (p.weight_kg) lines.push(`Weight: ${p.weight_kg}kg`);
+    if (p.activity_level) lines.push(`Activity level: ${p.activity_level}`);
+    if (p.cooking_skill) lines.push(`Cooking skill: ${p.cooking_skill}`);
+    if (p.household_size && p.household_size > 1) lines.push(`Cooking for ${p.household_size} people`);
+    if (p.budget_tier) lines.push(`Budget: ${p.budget_tier}`);
+    if (p.health_conditions) lines.push(`Health conditions: ${p.health_conditions}`);
+    if (p.disliked_ingredients) lines.push(`Disliked ingredients: ${p.disliked_ingredients}`);
+  }
+
   if (opts.avoidCuisines?.length) {
     lines.push(`Cuisines already used recently (pick a DIFFERENT one): ${opts.avoidCuisines.join(', ')}`);
   }
@@ -229,6 +257,74 @@ export async function generateMacros(planText: string, locale: 'en' | 'id' = 'en
     ? 'Kamu analis nutrisi. Dari rencana makan, hitung total: kalori, protein (g), karbohidrat (g), lemak (g). Tampilkan per meal dan total hari. Format ringkas untuk Telegram.'
     : 'You are a nutrition analyst. From the meal plan, compute totals: calories, protein (g), carbs (g), fat (g). Show per meal and daily total. Concise Telegram format.';
   return callLLM(sys, planText, { temperature: 0.2, maxTokens: 8192 });
+}
+
+export async function generateCookingSteps(planText: string, locale: 'en' | 'id' = 'en'): Promise<string> {
+  const sys = locale === 'id'
+    ? `Kamu koki praktis. Dari rencana makan yang diberikan, buat panduan masak untuk SETIAP meal:
+
+ Untuk setiap meal, tampilkan:
+ 1. 🍳 Peralatan — daftar alat masak (wajan, panci, talenan, pisau, dll)
+ 2. 📝 Langkah-langkah — nomor, ringkas, jelas (potong, tumis, masak, dll)
+ 3. 🍽️ Saran penyajian — tips plating/sajian singkat
+
+ Format per meal:
+ --- Nama Meal ---
+ 🍳 Peralatan: ...
+ 📝 Langkah:
+ 1. ...
+ 2. ...
+ 🍽️ Sajian: ...
+
+ Bahasa Indonesia, tanpa disclaimer, format Telegram (baris pendek).`
+    : `You are a practical cook. From the given meal plan, create cooking instructions for EACH meal:
+
+ For each meal, show:
+ 1. 🍳 Utensils — list cooking tools needed (pan, pot, cutting board, knife, etc)
+ 2. 📝 Steps — numbered, concise, clear (chop, saute, cook, etc)
+ 3. 🍽️ Serving — brief plating/serving tips
+
+ Format per meal:
+ --- Meal Name ---
+ 🍳 Utensils: ...
+ 📝 Steps:
+ 1. ...
+ 2. ...
+ 🍽️ Serving: ...
+
+ Plain English, no disclaimers, Telegram format (short lines).`;
+  return callLLM(sys, planText, { temperature: 0.4, maxTokens: 8192 });
+}
+
+export async function regenerateMeal(
+  planText: string,
+  mealName: string,
+  locale: 'en' | 'id' = 'en',
+  answers: Record<string, any> = {},
+): Promise<string> {
+  const sys = locale === 'id'
+    ? `Kamu asisten nutrisi. User mau ganti salah satu meal dari rencana makan mereka.
+Buat SATU pengganti untuk "${mealName}" yang:
+- Beda dari yang ada di rencana sekarang
+- Sesuai goal, alergi, dan pantangan user
+- Bahan tersedia di Indonesia
+- Sertakan kalori + protein perkiraan per meal
+- Format sama dengan meal lainnya di rencana
+
+Keluarin HANYA meal pengganti, bukan rencana lengkap. Tanpa preamble atau penjelasan.`
+    : `You are a nutrition assistant. The user wants to replace one meal from their plan.
+Generate ONE replacement for "${mealName}" that:
+- Is different from what's in the current plan
+- Matches the user's goal, allergies, and restrictions
+- Uses ingredients available in Indonesia
+- Includes estimated calories + protein per meal
+- Matches the format of other meals in the plan
+
+Output ONLY the replacement meal, not the full plan. No preamble or explanation.`;
+
+  const user = `Current full plan:\n${planText}\n\nUser goal: ${answers.goal || 'general health'}\nAllergies: ${answers.allergies || 'none'}\nRestrictions: ${answers.restrictions || 'none'}\nCalorie target: ${answers.calories || 'default'}\nProtein target: ${answers.protein || 'default'}\n\nReplace ONLY "${mealName}" with something different.`;
+
+  return callLLM(sys, user, { temperature: 0.85, maxTokens: 2048 });
 }
 
 export function parseCuisine(planText: string): string | null {

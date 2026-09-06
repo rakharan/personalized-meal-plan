@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <title>Saji — Welcome Screen</title>
+  <style>
+    :root {
+      --bg: #1A1612;
+      --surface: #241F1B;
+      --surface-2: #2D2823;
+      --surface-3: #3A342E;
+      --text: #E8E0D5;
+      --text-muted: #C4B8A8;
+      --text-subtle: #8A7E72;
+      --text-faint: #5C5248;
+      --primary: #52B788;
+      --accent: #F59E0B;
+      --border: rgba(255,255,255,0.06);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family:'Plus Jakarta Sans', sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 40px;
+    }
+    .card {
+      max-width: 500px; width: 100%;
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 48px 40px;
+      box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+    .logo { font-size: 4rem; margin-bottom: 16px; }
+    .brand { font-size: 2rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 8px; }
+    .brand span { color: var(--primary); }
+    .tagline { font-size: 1.25rem; color: var(--text-muted); margin-bottom: 32px; line-height: 1.7; }
+    .features { display: flex; flex-direction: column; gap: 12px; margin-bottom: 40px; }
+    .feature { display: flex; align-items: center; gap: 12px; text-align: left; }
+    .feature-icon { font-size: 1.5rem; width: 40px; text-align: center; }
+    .feature-text { font-size: 0.875rem; color: var(--text-muted); }
+    .cta {
+      display: inline-block; padding: 12px 32px;
+      background: var(--primary); color: var(--bg);
+      border-radius: 6px; font-size: 1rem; font-weight: 500;
+      text-decoration: none; transition: filter 150ms;
+    }
+    .cta:hover { filter: brightness(1.1); }
+    .cta:active { transform: scale(0.97); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">🍽️</div>
+    <div class="brand">Sa<span>ji</span></div>
+    <p class="tagline">Halo! Aku Saji.<br>Bakal bantu kamu makan enak + sehat setiap hari.<br>Bahan yang aku pilih gampang cari di Indonesia.</p>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🎯</div>
+        <div class="feature-text">Sesuai goal — bulking, cutting, maintenance</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🥘</div>
+        <div class="feature-text">Bahan lokal — tempe, kangkung, ikan kembung</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔥</div>
+        <div class="feature-text">Streak harian — jaga konsistensi</div>
+      </div>
+    </div>
+    <a href="https://t.me/personalized_meal_planner_bot" class="cta">Mulai dong! →</a>
+  </div>
+</body>
+</html>

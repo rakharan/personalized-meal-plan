@@ -4,9 +4,10 @@ const tsxCli = path.join(__dirname, 'node_modules', 'tsx', 'dist', 'cli.mjs');
 module.exports = {
   apps: [
     {
-      name: 'hermes-mealplan-bot',
+      name: 'saji-bot',
       script: tsxCli,
       args: 'src/index.ts',
+      cwd: __dirname,
       interpreter: 'node',
       watch: false,
       env: {
@@ -14,9 +15,10 @@ module.exports = {
       },
     },
     {
-      name: 'hermes-mealplan-dashboard',
+      name: 'saji-api',
       script: tsxCli,
-      args: 'src/dashboard.ts',
+      args: 'src/api.ts',
+      cwd: __dirname,
       interpreter: 'node',
       watch: false,
       env: {
