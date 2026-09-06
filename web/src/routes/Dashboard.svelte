@@ -61,12 +61,12 @@
         <span class="pulse-time">Update {fmtUpdateTime(lastUpdated)}</span>
       {/if}
       <div class="pulse-metrics">
-        <div class="metric" class:highlight>
+        <div class="metric" class:highlight={true}>
           <span class="m-value">{data.totalUsers}</span>
           <span class="m-label">Users</span>
         </div>
         <div class="metric-sep"></div>
-        <div class="metric" class:highlight>
+        <div class="metric" class:highlight={true}>
           <span class="m-value">{data.activeSubs}</span>
           <span class="m-label">Active Subs</span>
         </div>
