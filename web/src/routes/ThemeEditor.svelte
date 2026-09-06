@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Button from '$lib/components/Button.svelte';
   import StatCard from '$lib/components/StatCard.svelte';
   import Badge from '$lib/components/Badge.svelte';
@@ -36,14 +37,18 @@
     { name: 'radius-lg', var: '--radius-lg', type: 'number', group: 'Radius' },
   ];
 
-  // Load current values from :root
+  // Load current values from :root — NOT reactive, just reads once
   let tokenValues = $state<Record<string, string>>({});
+  let loaded = false;
+
   function loadTokens() {
+    if (loaded) return; // prevent re-entrant calls
     const root = getComputedStyle(document.documentElement);
     for (const def of tokenDefs) {
       tokenValues[def.name] = root.getPropertyValue(def.var).trim();
     }
-    tokenValues = { ...tokenValues }; // trigger reactivity
+    loaded = true;
+    tokenValues = { ...tokenValues };
   }
 
   function updateToken(def: TokenDef, value: string) {
@@ -72,19 +77,16 @@
   }
 
   function reset() {
-    // Only remove inline overrides we added — don't touch :root tokens
-    // that came from the stylesheet.
     const styleEl = document.documentElement.style;
     for (const def of tokenDefs) {
       styleEl.removeProperty(def.var);
     }
-    // Force reload from the stylesheet by reading computed values
+    loaded = false;
     loadTokens();
   }
 
-  // Clean up on unmount — remove all inline overrides so other pages
-  // get the original stylesheet tokens.
-  $effect(() => {
+  // Init once on mount, clean up on unmount
+  onMount(() => {
     loadTokens();
     return () => {
       const styleEl = document.documentElement.style;

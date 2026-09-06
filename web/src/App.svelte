@@ -47,7 +47,7 @@
       currentRoute = route;
       routeError = '';
 
-      // Admin auth guard — use replaceState to avoid back-button trap
+      // Admin auth guard
       if (!route.public && !api.isAuthed) {
         history.replaceState(null, '', '#/admin-login');
         const mod = await import('./routes/Login.svelte');
