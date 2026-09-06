@@ -282,8 +282,8 @@ export async function regenerateMeal(
   chatId?: number,
 ): Promise<string> {
   const sys = locale === 'id'
-    ? `Asisten nutrisi. Ganti "${mealName}" dengan yang beda. Sesuai goal/alergi, bahan Indonesia, sertakan kalori+protein. Output HANYA meal pengganti.`
-    : `Nutrition assistant. Replace "${mealName}" with something different. Match goal/allergies, Indonesian ingredients, include calories+protein. Output ONLY the replacement meal.`;
+    ? `Asisten nutrisi. Ganti "${mealName}" dengan yang beda. Sesuai goal/alergi, bahan Indonesia, sertakan kalori+protein. Output HANYA meal pengganti dalam format yang SAMA dengan meal lain di rencana: nama meal di baris pertama, items di bawahnya, kalori+protein di akhir. Tanpa markdown, tanpa "(pengganti)", tanpa prefix.`
+    : `Nutrition assistant. Replace "${mealName}" with something different. Match goal/allergies, Indonesian ingredients, include calories+protein. Output ONLY the replacement meal in the SAME format as other meals in the plan: meal name on first line, items below, calories+protein at end. No markdown, no "(replacement)" suffix, no prefix.`;
   const user = `Current plan:\n${planText}\n\nGoal: ${answers.goal || 'general'}\nAllergies: ${answers.allergies || 'none'}\nRestrictions: ${answers.restrictions || 'none'}\n\nReplace ONLY "${mealName}".`;
   const result = await callLLM(sys, user, { temperature: 0.85, maxTokens: 2048 });
   await logUsageSafe(chatId, result.usage, 'regenerate-meal');

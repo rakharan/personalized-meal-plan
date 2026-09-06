@@ -21,18 +21,20 @@
   // Parse meals from plan text
   function parseMeals(text: string): Meal[] {
     if (!text) return [];
+    // Strip markdown bold/italic before matching
+    const clean = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1');
     const mealRegex = /(?:^|\n)(?:🍳|🍱|🌙|☀️|🌅|🥗|🍲)?\s*((?:Sarapan|Breakfast|Makan\s+siang|Lunch|Makan\s+malam|Dinner|Snack|Camilan|Brunch))[^\n]*/gi;
     const splits: { name: string; start: number }[] = [];
     let match;
-    while ((match = mealRegex.exec(text)) !== null) {
+    while ((match = mealRegex.exec(clean)) !== null) {
       splits.push({ name: match[1].trim(), start: match.index });
     }
     if (splits.length === 0) return [];
     const result: Meal[] = [];
     for (let i = 0; i < splits.length; i++) {
       const start = splits[i].start;
-      const end = i + 1 < splits.length ? splits[i + 1].start : text.length;
-      const chunk = text.slice(start, end).trim();
+      const end = i + 1 < splits.length ? splits[i + 1].start : clean.length;
+      const chunk = clean.slice(start, end).trim();
       const macroMatch = chunk.match(/(~?\d+\s*(?:kal|kcal|kkal|cal).*?protein.*?\d+\s*g)/i);
       const macros = macroMatch ? macroMatch[1] : '';
       const body = chunk.replace(mealRegex, '').trim();
@@ -66,12 +68,13 @@
 
       // Replace the meal chunk in planText using the meal's current
       // start/end indices. Re-parse to get fresh indices first (in case
-      // a prior regeneration shifted them).
+      // a prior regeneration shifted them). Use cleaned text for matching.
+      const cleanText = planText.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1');
       const freshMeals = parseMeals(planText);
       const freshMeal = freshMeals.find(m => m.name === meal.name);
       if (freshMeal) {
-        const before = planText.slice(0, freshMeal.start);
-        const after = planText.slice(freshMeal.end);
+        const before = cleanText.slice(0, freshMeal.start);
+        const after = cleanText.slice(freshMeal.end);
         planText = before + newChunk + '\n' + after;
       } else {
         // Fallback: append the regenerated meal at the end
