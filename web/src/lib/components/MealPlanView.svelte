@@ -62,11 +62,21 @@
         throw new Error(d.error || 'Gagal regenerasi');
       }
       const data = await res.json();
-      // Replace the meal chunk in planText
       const newChunk = data.meal.trim();
-      const before = planText.slice(0, meal.start);
-      const after = planText.slice(meal.end);
-      planText = before + newChunk + '\n' + after;
+
+      // Replace the meal chunk in planText using the meal's current
+      // start/end indices. Re-parse to get fresh indices first (in case
+      // a prior regeneration shifted them).
+      const freshMeals = parseMeals(planText);
+      const freshMeal = freshMeals.find(m => m.name === meal.name);
+      if (freshMeal) {
+        const before = planText.slice(0, freshMeal.start);
+        const after = planText.slice(freshMeal.end);
+        planText = before + newChunk + '\n' + after;
+      } else {
+        // Fallback: append the regenerated meal at the end
+        planText = planText + '\n' + newChunk;
+      }
     } catch (e: any) {
       error = e.message;
     } finally {
