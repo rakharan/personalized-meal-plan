@@ -72,14 +72,27 @@
   }
 
   function reset() {
+    // Only remove inline overrides we added — don't touch :root tokens
+    // that came from the stylesheet.
+    const styleEl = document.documentElement.style;
     for (const def of tokenDefs) {
-      document.documentElement.style.removeProperty(def.var);
+      styleEl.removeProperty(def.var);
     }
+    // Force reload from the stylesheet by reading computed values
     loadTokens();
   }
 
-  // Init
-  $effect(() => { loadTokens(); });
+  // Clean up on unmount — remove all inline overrides so other pages
+  // get the original stylesheet tokens.
+  $effect(() => {
+    loadTokens();
+    return () => {
+      const styleEl = document.documentElement.style;
+      for (const def of tokenDefs) {
+        styleEl.removeProperty(def.var);
+      }
+    };
+  });
 
   const previewBarData = [
     { label: 'Free', value: 42 },
@@ -94,6 +107,7 @@
       <p>Edit tokens live. Export when satisfied. Dev-only — not shipped to users.</p>
     </div>
     <div class="actions">
+      <a href="#/admin" class="back-link">← Back to Dashboard</a>
       <Button variant="ghost" onclick={reset}>Reset</Button>
       <Button variant="primary" onclick={exportTokens}>Export tokens.json</Button>
     </div>
@@ -176,7 +190,9 @@
   header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); }
   header h1 { font-size: var(--fs-xl); font-weight: var(--fw-semibold); margin-bottom: var(--space-1); }
   header p { color: var(--text-subtle); font-size: var(--fs-sm); }
-  .actions { display: flex; gap: var(--space-2); }
+  .actions { display: flex; gap: var(--space-2); align-items: center; }
+  .back-link { font-size: var(--fs-sm); color: var(--text-subtle); text-decoration: none; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); transition: color var(--duration-micro) var(--ease-standard); }
+  .back-link:hover { color: var(--primary); }
   .editor-layout { display: grid; grid-template-columns: 400px 1fr; gap: var(--space-6); }
   .token-controls { display: flex; flex-direction: column; gap: var(--space-6); }
   .token-group {
