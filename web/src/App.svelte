@@ -41,37 +41,38 @@
     if (isHandling) return;
     isHandling = true;
 
-    const hash = window.location.hash || '#/';
-    const route = routes.find(r => hash.startsWith(r.hash)) || routes[routes.length - 1];
-    currentRoute = route;
-    routeError = '';
-
-    // Admin auth guard — use replaceState to avoid back-button trap
-    if (!route.public && !api.isAuthed) {
-      history.replaceState(null, '', '#/admin-login');
-      const mod = await import('./routes/Login.svelte');
-      RouteComponent = mod.default;
-      isHandling = false;
-      return;
-    }
-
-    // User auth guard
-    if (route.userAuth && !auth.isAuthed) {
-      history.replaceState(null, '', '#/login');
-      const mod = await import('./routes/UserLogin.svelte');
-      RouteComponent = mod.default;
-      isHandling = false;
-      return;
-    }
-
     try {
-      const mod = await route.loader();
-      RouteComponent = mod.default;
-    } catch (e: any) {
-      routeError = e.message;
-      RouteComponent = null;
+      const hash = window.location.hash || '#/';
+      const route = routes.find(r => hash.startsWith(r.hash)) || routes[routes.length - 1];
+      currentRoute = route;
+      routeError = '';
+
+      // Admin auth guard — use replaceState to avoid back-button trap
+      if (!route.public && !api.isAuthed) {
+        history.replaceState(null, '', '#/admin-login');
+        const mod = await import('./routes/Login.svelte');
+        RouteComponent = mod.default;
+        return;
+      }
+
+      // User auth guard
+      if (route.userAuth && !auth.isAuthed) {
+        history.replaceState(null, '', '#/login');
+        const mod = await import('./routes/UserLogin.svelte');
+        RouteComponent = mod.default;
+        return;
+      }
+
+      try {
+        const mod = await route.loader();
+        RouteComponent = mod.default;
+      } catch (e: any) {
+        routeError = e.message;
+        RouteComponent = null;
+      }
+    } finally {
+      isHandling = false;
     }
-    isHandling = false;
   }
 
   function retry() {
