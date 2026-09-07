@@ -766,3 +766,212 @@ export async function verifyWhatsAppOTP(phone: string, code: string): Promise<bo
   await pool.query('UPDATE whatsapp_otps SET verified = 1 WHERE phone = $1 AND code = $2', [phone, code]);
   return true;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Actionable admin metrics
+// ════════════════════════════════════════════════════════════════════════════
+
+// Daily Active Users — distinct users who generated plans or used LLM per day
+export async function getDAU(days = 30): Promise<{ date: string; dau: number; new_users: number }[]> {
+  const { rows } = await pool.query(`
+    WITH date_series AS (
+      SELECT generate_series(
+        CURRENT_DATE - ($1::int - 1) * INTERVAL '1 day',
+        CURRENT_DATE,
+        INTERVAL '1 day'
+      )::date AS d
+    ),
+    active_users AS (
+      SELECT DISTINCT chat_id, DATE(created) AS d
+      FROM usage_log
+      WHERE created >= CURRENT_DATE - $1 * INTERVAL '1 day'
+      GROUP BY chat_id, DATE(created)
+    ),
+    new_users AS (
+      SELECT DATE(created_at) AS d, COUNT(*)::int AS cnt
+      FROM subscribers
+      WHERE created_at >= CURRENT_DATE - $1 * INTERVAL '1 day'
+      GROUP BY DATE(created_at)
+    )
+    SELECT
+      ds.d::text AS date,
+      COALESCE(COUNT(DISTINCT au.chat_id), 0)::int AS dau,
+      COALESCE(nu.cnt, 0)::int AS new_users
+    FROM date_series ds
+    LEFT JOIN active_users au ON au.d = ds.d
+    LEFT JOIN new_users nu ON nu.d = ds.d
+    GROUP BY ds.d
+    ORDER BY ds.d ASC
+  `, [days]);
+  return rows;
+}
+
+// MAU — monthly active users
+export async function getMAU(): Promise<number> {
+  const { rows } = await pool.query(
+    "SELECT COUNT(DISTINCT chat_id)::int FROM usage_log WHERE created >= NOW() - INTERVAL '30 days'"
+  );
+  return rows[0].count;
+}
+
+// Conversion rate — premium / total
+export async function getConversion(): Promise<{ total: number; premium: number; free: number; rate: number }> {
+  const { rows } = await pool.query(
+    "SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE tier = 'premium')::int AS premium, COUNT(*) FILTER (WHERE tier = 'free')::int AS free FROM subscribers"
+  );
+  const total = rows[0].total || 0;
+  const premium = rows[0].premium || 0;
+  return { total, premium, free: rows[0].free || 0, rate: total > 0 ? Math.round((premium / total) * 100) : 0 };
+}
+
+// Token cost per user — total tokens / active users
+export async function getTokenEconomics(days = 30): Promise<{ totalTokens: number; totalCost: number; perUser: number; activeUsers: number }> {
+  const { rows } = await pool.query(`
+    SELECT
+      COALESCE(SUM(tokens), 0)::int AS total_tokens,
+      COUNT(DISTINCT chat_id)::int AS active_users
+    FROM usage_log
+    WHERE created >= NOW() - $1 * INTERVAL '1 day'
+  `, [days]);
+  const totalTokens = rows[0].total_tokens || 0;
+  const activeUsers = rows[0].active_users || 0;
+  // Rough cost: $0.50 per 1M tokens (adjust based on actual provider pricing)
+  const totalCost = (totalTokens / 1_000_000) * 0.50;
+  return {
+    totalTokens,
+    totalCost: Math.round(totalCost * 100) / 100,
+    perUser: activeUsers > 0 ? Math.round(totalTokens / activeUsers) : 0,
+    activeUsers,
+  };
+}
+
+// Plan generation trend — daily counts last N days
+export async function getPlanTrend(days = 14): Promise<{ date: string; count: number; cuisine: string }[]> {
+  const { rows } = await pool.query(`
+    WITH date_series AS (
+      SELECT generate_series(
+        CURRENT_DATE - ($1::int - 1) * INTERVAL '1 day',
+        CURRENT_DATE,
+        INTERVAL '1 day'
+      )::date AS d
+    ),
+    daily_plans AS (
+      SELECT DATE(created) AS d, COUNT(*)::int AS cnt
+      FROM usage_log
+      WHERE feature = 'mealplan' AND created >= CURRENT_DATE - $1 * INTERVAL '1 day'
+      GROUP BY DATE(created)
+    )
+    SELECT
+      ds.d::text AS date,
+      COALESCE(dp.cnt, 0)::int AS count,
+      '' AS cuisine
+    FROM date_series ds
+    LEFT JOIN daily_plans dp ON dp.d = ds.d
+    ORDER BY ds.d ASC
+  `, [days]);
+  return rows;
+}
+
+// Retention curve — cohort analysis (users who signed up on day N, % active on day N+1, N+7, N+30)
+export async function getRetention(): Promise<{ cohort: string; size: number; d1: number; d7: number; d30: number }[]> {
+  const { rows } = await pool.query(`
+    WITH cohorts AS (
+      SELECT
+        TO_CHAR(created_at, 'YYYY-MM') AS cohort,
+        chat_id,
+        DATE(created_at) AS signup_date
+      FROM subscribers
+      WHERE created_at >= NOW() - INTERVAL '90 days'
+    ),
+    active_days AS (
+      SELECT DISTINCT chat_id, DATE(created) AS active_date
+      FROM usage_log
+      WHERE created >= NOW() - INTERVAL '90 days'
+    )
+    SELECT
+      c.cohort,
+      COUNT(DISTINCT c.chat_id)::int AS size,
+      COALESCE(COUNT(DISTINCT c.chat_id) FILTER (
+        WHERE EXISTS (SELECT 1 FROM active_days ad WHERE ad.chat_id = c.chat_id AND ad.active_date = c.signup_date + 1)
+      ), 0)::int AS d1,
+      COALESCE(COUNT(DISTINCT c.chat_id) FILTER (
+        WHERE EXISTS (SELECT 1 FROM active_days ad WHERE ad.chat_id = c.chat_id AND ad.active_date <= c.signup_date + 7 AND ad.active_date > c.signup_date)
+      ), 0)::int AS d7,
+      COALESCE(COUNT(DISTINCT c.chat_id) FILTER (
+        WHERE EXISTS (SELECT 1 FROM active_days ad WHERE ad.chat_id = c.chat_id AND ad.active_date <= c.signup_date + 30 AND ad.active_date > c.signup_date)
+      ), 0)::int AS d30
+    FROM cohorts c
+    GROUP BY c.cohort
+    ORDER BY c.cohort DESC
+    LIMIT 6
+  `);
+  return rows.map((r: any) => ({
+    cohort: r.cohort,
+    size: r.size,
+    d1: r.size > 0 ? Math.round((r.d1 / r.size) * 100) : 0,
+    d7: r.size > 0 ? Math.round((r.d7 / r.size) * 100) : 0,
+    d30: r.size > 0 ? Math.round((r.d30 / r.size) * 100) : 0,
+  }));
+}
+
+// Feature usage breakdown — which features users actually use
+export async function getFeatureUsage(days = 30): Promise<{ feature: string; calls: number; tokens: number }[]> {
+  const { rows } = await pool.query(`
+    SELECT feature, COUNT(*)::int AS calls, COALESCE(SUM(tokens), 0)::int AS tokens
+    FROM usage_log
+    WHERE created >= NOW() - $1 * INTERVAL '1 day'
+    GROUP BY feature
+    ORDER BY calls DESC
+  `, [days]);
+  return rows;
+}
+
+// Plan generation by hour — when users are active
+export async function getActivityByHour(): Promise<{ hour: number; count: number }[]> {
+  const { rows } = await pool.query(`
+    SELECT EXTRACT(HOUR FROM created)::int AS hour, COUNT(*)::int AS count
+    FROM usage_log
+    WHERE created >= CURRENT_DATE - INTERVAL '7 days'
+    GROUP BY EXTRACT(HOUR FROM created)
+    ORDER BY hour ASC
+  `);
+  // Fill missing hours
+  const result: { hour: number; count: number }[] = [];
+  const map = new Map(rows.map((r: any) => [r.hour, r.count]));
+  for (let h = 0; h < 24; h++) {
+    result.push({ hour: h, count: map.get(h) || 0 });
+  }
+  return result;
+}
+
+// Cuisine popularity — from meal_plan_history
+export async function getCuisinePopularity(): Promise<{ cuisine: string; count: number }[]> {
+  const { rows } = await pool.query(`
+    SELECT COALESCE(NULLIF(cuisine, ''), 'Unknown') AS cuisine, COUNT(*)::int AS count
+    FROM meal_plan_history
+    WHERE cuisine IS NOT NULL
+    GROUP BY cuisine
+    ORDER BY count DESC
+    LIMIT 10
+  `);
+  return rows;
+}
+
+// Churn — users who stopped generating plans (last active > 7 days ago, was active before)
+export async function getChurnRate(): Promise<{ totalActive: number; churned: number; rate: number }> {
+  const { rows } = await pool.query(`
+    WITH last_active AS (
+      SELECT chat_id, MAX(created) AS last_seen
+      FROM usage_log
+      GROUP BY chat_id
+    )
+    SELECT
+      COUNT(*)::int AS total_active,
+      COUNT(*) FILTER (WHERE last_seen < NOW() - INTERVAL '7 days')::int AS churned
+    FROM last_active
+    WHERE last_seen >= NOW() - INTERVAL '30 days'
+  `);
+  const totalActive = rows[0].total_active || 0;
+  const churned = rows[0].churned || 0;
+  return { totalActive, churned, rate: totalActive > 0 ? Math.round((churned / totalActive) * 100) : 0 };
+}

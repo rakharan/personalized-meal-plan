@@ -69,6 +69,10 @@ class ApiState {
   async getReferrals(): Promise<any> {
     return this.request('/api/referrals', { headers: this.authHeaders() });
   }
+
+  async getMetrics(): Promise<any> {
+    return this.request('/api/metrics', { headers: this.authHeaders() });
+  }
 }
 
 export const api = new ApiState();

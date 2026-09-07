@@ -9,6 +9,7 @@ import {
   getSubscribedWebUsers, updateUserProfile, linkTelegramAccount, createTelegramLinkToken,
   consumeTelegramLinkToken, savePlanHistory, getPlanHistory,
   saveWhatsAppOTP, verifyWhatsAppOTP,
+  getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
 } from './store.js';
 import { hashPassword, verifyPassword, signToken, userAuth, DUMMY_HASH } from './auth.js';
 import {
@@ -516,6 +517,40 @@ async function pushDailyPlansWeb(): Promise<void> {
     }
   }
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Admin: actionable metrics
+// ────────────────────────────────────────────────────────────────────────────
+app.get('/api/metrics', authCheck, async (_req: Request, res: Response) => {
+  try {
+    const [dau, mau, conversion, tokenEcon, planTrend, retention, featureUsage, activityByHourData, cuisinePop, churn] = await Promise.all([
+      getDAU(30),
+      getMAU(),
+      getConversion(),
+      getTokenEconomics(30),
+      getPlanTrend(14),
+      getRetention(),
+      getFeatureUsage(30),
+      getActivityByHour(),
+      getCuisinePopularity(),
+      getChurnRate(),
+    ]);
+    res.json({
+      dau,
+      mau,
+      conversion,
+      tokenEconomics: tokenEcon,
+      planTrend,
+      retention,
+      featureUsage,
+      activityByHour: activityByHourData,
+      cuisinePopularity: cuisinePop,
+      churn,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ────────────────────────────────────────────────────────────────────────────
 // Static SPA serving (production)
