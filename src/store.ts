@@ -796,7 +796,7 @@ export async function getDAU(days = 30): Promise<{ date: string; dau: number; ne
     SELECT
       ds.d::text AS date,
       COALESCE(COUNT(DISTINCT au.chat_id), 0)::int AS dau,
-      COALESCE(nu.cnt, 0)::int AS new_users
+      COALESCE(MAX(nu.cnt), 0)::int AS new_users
     FROM date_series ds
     LEFT JOIN active_users au ON au.d = ds.d
     LEFT JOIN new_users nu ON nu.d = ds.d
