@@ -214,6 +214,10 @@ export async function migrateSchema(): Promise<void> {
     if (!historyCols.has('meals_json')) {
       await pool.query('ALTER TABLE meal_plan_history ADD COLUMN meals_json JSONB');
     }
+    if (!historyCols.has('cooked_at')) {
+      await pool.query('ALTER TABLE meal_plan_history ADD COLUMN cooked_at TIMESTAMPTZ');
+    }
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_meal_plan_history_cooked ON meal_plan_history(user_id, cooked_at);');
 
     // ── Telegram link tokens (temporary, for connecting bot to web account) ──
     await pool.query(`
@@ -858,7 +862,7 @@ export function parsePlanMeals(text: string): ParsedMeal[] {
     const end = i + 1 < splits.length ? splits[i + 1].start : clean.length;
     const chunk = clean.slice(start, end).trim();
     const macroMatch = chunk.match(/(~?\d+\s*(?:kal|kcal|kkal|cal)[^\n]*)/i);
-    const macros = macroMatch ? macroMatch[1] : '';
+    const macros = macroMatch ? macroMatch[1].replace(/^\(+|\)+$/g, '').trim() : '';
     const body = chunk.replace(mealRegex, '').trim();
     // Extract kcal — matches "740 kkal", "~740 kal", "740kcal"
     const kcalMatch = (macros || chunk).match(/~?(\d+)\s*(?:kal|kcal|kkal|cal)/i);
@@ -881,6 +885,8 @@ export function parsePlanMeals(text: string): ParsedMeal[] {
         && !kaloriLineRegex.test(l)
         && !/^\(.*kal.*protein/i.test(l)  // skip "(~740 kkal, 37g protein)"
         && !/^\d+\s*g\s*protein/i.test(l) // skip "37g protein"
+        && !/^[A-ZÀ-Ý\s]+\s*\(.*kal/i.test(l) // skip leftover header tail "SIANG (~730 kkal, ...)"
+        && !/^~?\d+\s*(kal|kcal|kkal|cal).*\)$/i.test(l) // skip stray macro line ending in ")"
       );
     result.push({
       name: splits[i].name,
@@ -907,7 +913,7 @@ export async function savePlanHistory(userId: number, planText: string, cuisine:
 
 export async function getPlanHistory(userId: number, limit = 30): Promise<any[]> {
   const { rows } = await pool.query(
-    'SELECT id, plan_text, meals_json, cuisine, calories_total, protein_total, created_at FROM meal_plan_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+    'SELECT id, plan_text, meals_json, cuisine, calories_total, protein_total, cooked_at, created_at FROM meal_plan_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
     [userId, limit]
   );
   return rows.map((r: any) => ({
@@ -917,9 +923,61 @@ export async function getPlanHistory(userId: number, limit = 30): Promise<any[]>
     cuisine: r.cuisine,
     calories: r.calories_total,
     protein: r.protein_total,
+    cookedAt: r.cooked_at ? new Date(r.cooked_at).toISOString() : null,
     created: r.created_at.toISOString(),
   }));
 }
+
+// Mark today's (or given) plan as cooked. Only allows one cooked plan per day
+// (newer cook overwrites older). Returns the cooked plan id or null if no plan.
+export async function markCooked(userId: number, planId: number | null): Promise<number | null> {
+  // If no planId given, use the user's latest plan
+  const id = planId ?? (
+    await pool.query(
+      'SELECT id FROM meal_plan_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [userId]
+    )
+  ).rows[0]?.id ?? null;
+  if (!id) return null;
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  // Un-cook any earlier plan cooked today (keeps one per day)
+  await pool.query(
+    'UPDATE meal_plan_history SET cooked_at = NULL WHERE user_id = $1 AND cooked_at >= $2 AND id <> $3',
+    [userId, todayStart, id]
+  );
+  await pool.query(
+    'UPDATE meal_plan_history SET cooked_at = NOW() WHERE id = $1 AND user_id = $2',
+    [id, userId]
+  );
+  return id;
+}
+
+// Current streak for a web user: consecutive days ending today with a cooked plan
+export async function getWebUserStreak(userId: number): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT (cooked_at AT TIME ZONE 'Asia/Jakarta')::date AS d
+     FROM meal_plan_history
+     WHERE user_id = $1 AND cooked_at IS NOT NULL
+     ORDER BY d DESC`,
+    [userId]
+  );
+  const days: string[] = rows.map((r: any) => r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d));
+  const today = (await pool.query(`SELECT (NOW() AT TIME ZONE 'Asia/Jakarta')::date AS d`)).rows[0].d;
+  const todayStr = today instanceof Date ? today.toISOString().slice(0, 10) : String(today);
+  if (!days.includes(todayStr)) return 0;
+  let streak = 0;
+  const cur = new Date(todayStr + 'T00:00:00Z');
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(cur.getTime() - i * 86400000);
+    const dStr = d.toISOString().slice(0, 10);
+    if (days.includes(dStr)) streak++;
+    else break;
+  }
+  return streak;
+}
+
 
 // ── WhatsApp OTP ──
 export async function saveWhatsAppOTP(phone: string, code: string): Promise<void> {

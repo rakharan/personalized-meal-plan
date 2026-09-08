@@ -7,3 +7,4 @@ mealplan.db-wal
 web/dist
 web/node_modules
 .superdesign
+web/redesign/

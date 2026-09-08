@@ -132,9 +132,6 @@
             {:else}
               <pre class="food-raw">{meal.body}</pre>
             {/if}
-            {#if meal.macros}
-              <div class="meal-macros">{meal.macros}</div>
-            {/if}
           </div>
         {/if}
       </article>

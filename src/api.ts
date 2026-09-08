@@ -8,6 +8,7 @@ import {
   createUserProfile, getUserByEmail, getUserById, getUserByTelegramChatId,
   getSubscribedWebUsers, updateUserProfile, linkTelegramAccount, createTelegramLinkToken,
   consumeTelegramLinkToken, savePlanHistory, getPlanHistory,
+  markCooked, getWebUserStreak,
   saveWhatsAppOTP, verifyWhatsAppOTP,
   getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
   getHealthScore, getAlerts, getTodaySnapshot, getRecentUsers, getPowerUsers, getAtRiskUsers, getFeedbackWall, getPlanQuality, getPushStatus,
@@ -495,7 +496,8 @@ app.post('/api/plans/generate', userAuth, async (req: Request, res: Response) =>
 app.get('/api/plans/history', userAuth, async (req: Request, res: Response) => {
   const userId = (req as any).userId;
   const history = await getPlanHistory(userId);
-  res.json({ plans: history });
+  const streak = await getWebUserStreak(userId);
+  res.json({ plans: history, streak });
 });
 
 app.post('/api/plans/cooking-steps', userAuth, async (req: Request, res: Response) => {
@@ -563,6 +565,22 @@ app.post('/api/plans/regenerate-meal', userAuth, async (req: Request, res: Respo
     await savePlanHistory(userId, updatedPlan, cuisine, user.target_calories, user.target_protein);
 
     res.json({ meal: newMealText, planText: updatedPlan, meals });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// User: mark today's plan as cooked (check-in)
+// ────────────────────────────────────────────────────────────────────────────
+app.post('/api/plans/cook', userAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  const planId: number | null = req.body?.planId ?? null;
+  try {
+    const cooked = await markCooked(userId, Number.isFinite(planId) ? planId : null);
+    if (!cooked) { res.status(400).json({ error: 'Belum ada rencana makan. Generate dulu ya!' }); return; }
+    const streak = await getWebUserStreak(userId);
+    res.json({ cooked: true, planId: cooked, streak });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
