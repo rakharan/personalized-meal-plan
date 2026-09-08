@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import Button from './Button.svelte';
   import { theme } from '$lib/stores/theme.svelte';
 
   let {
@@ -48,8 +47,8 @@
       </a>
     {/each}
     <button class="theme-toggle" onclick={cycleTheme}>{mode}</button>
-    <a href="#/login" onclick={closeMobileNav}><Button variant="ghost" size="sm">Masuk</Button></a>
-    <a href="#/signup" onclick={closeMobileNav}><Button variant="primary" size="sm">Daftar Gratis</Button></a>
+    <a href="#/login" class="nav-cta" onclick={closeMobileNav}>Masuk</a>
+    <a href="#/signup" class="nav-cta nav-cta-primary" onclick={closeMobileNav}>Daftar Gratis</a>
   </div>
   <button class="hamburger" onclick={() => mobileNavOpen = !mobileNavOpen} aria-label="Menu navigasi">
     {#if mobileNavOpen}&times;{:else}&#9776;{/if}
@@ -118,6 +117,18 @@
   }
   .theme-toggle:hover { color: var(--text); border-color: var(--text-subtle); }
 
+  .nav-cta {
+    font-size: var(--fs-sm); color: var(--text-subtle); text-decoration: none;
+    min-height: 44px; display: flex; align-items: center; padding: 0 var(--space-2);
+    border-radius: var(--radius-sm); transition: color var(--duration-micro) var(--ease-standard);
+  }
+  .nav-cta:hover { color: var(--text); }
+  .nav-cta-primary {
+    background: var(--primary); color: var(--text-on-primary) !important; font-weight: var(--fw-medium);
+    padding: 0 var(--space-3); min-height: 36px;
+  }
+  .nav-cta-primary:hover { color: var(--text-on-primary) !important; opacity: 0.9; }
+
   .hamburger {
     display: none; background: var(--surface-2); border: 1px solid var(--border);
     border-radius: var(--radius-sm); width: 44px; height: 44px;
@@ -148,11 +159,13 @@
       position: fixed; top: 57px; left: 0; right: 0;
       background: var(--surface); border-bottom: 1px solid var(--border);
       flex-direction: column; gap: var(--space-3); padding: var(--space-4);
-      transform: translateY(-100%); transition: transform var(--duration-small) var(--ease-standard);
-      z-index: 1000;
+      display: none;
+      z-index: 1000; box-shadow: var(--shadow-elevation-2);
     }
-    .nav-links.open { transform: translateY(0); }
+    .nav-links.open { display: flex; }
     .nav-links a { width: 100%; min-height: 48px; }
+    .nav-cta { width: 100%; justify-content: center; min-height: 48px; }
+    .nav-cta-primary { width: 100%; min-height: 44px; margin-top: var(--space-1); }
     .footer-inner { flex-direction: column; gap: var(--space-6); }
   }
 </style>

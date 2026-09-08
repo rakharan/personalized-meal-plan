@@ -46,7 +46,11 @@
   let isHandling = false;
 
   async function handleHashChange() {
-    if (isHandling) return;
+    if (isHandling) {
+      // Already handling — queue re-run after current finishes
+      isHandling = 'pending';
+      return;
+    }
     isHandling = true;
 
     try {
@@ -80,7 +84,12 @@
         RouteComponent = null;
       }
     } finally {
+      const pending = isHandling === 'pending';
       isHandling = false;
+      if (pending) {
+        // Re-run if a hashchange was queued during this run
+        handleHashChange();
+      }
     }
   }
 

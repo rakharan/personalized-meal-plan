@@ -16,7 +16,6 @@
     try {
       await auth.login(email, password);
       window.location.hash = '#/dashboard';
-      window.location.reload();
     } catch (e: any) {
       error = e.message;
     } finally { loading = false; }

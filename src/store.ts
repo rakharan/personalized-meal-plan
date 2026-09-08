@@ -857,17 +857,17 @@ export function parsePlanMeals(text: string): ParsedMeal[] {
     const start = splits[i].start;
     const end = i + 1 < splits.length ? splits[i + 1].start : clean.length;
     const chunk = clean.slice(start, end).trim();
-    const macroMatch = chunk.match(/(~?\d+\s*(?:kal|kcal|kkal|cal).*?protein.*?\d+\s*g)/i);
+    const macroMatch = chunk.match(/(~?\d+\s*(?:kal|kcal|kkal|cal)[^\n]*)/i);
     const macros = macroMatch ? macroMatch[1] : '';
     const body = chunk.replace(mealRegex, '').trim();
     // Extract kcal — matches "740 kkal", "~740 kal", "740kcal"
     const kcalMatch = (macros || chunk).match(/~?(\d+)\s*(?:kal|kcal|kkal|cal)/i);
     // Extract protein — matches "Protein: ~37g" OR "37g protein" OR "protein 37g"
-    const proteinMatch = (macros || chunk).match(/protein\W*~?(\d+)\s*g/i) || (macros || chunk).match(/(\d+)\s*g\W*protein/i);
+    const proteinMatch = (macros || chunk).match(/protein[^\d,]*~?(\d+)\s*g/i) || (macros || chunk).match(/(\d+)\s*g[^\d,]*protein/i);
     // Extract carbs — matches "90g karbo" OR "karbo: 90g" OR "90g carbs" OR "carbs 90g"
-    const carbsMatch = (macros || chunk).match(/(?:karbo|carb[s]?)\W*~?(\d+)\s*g/i) || (macros || chunk).match(/(\d+)\s*g\W*(?:karbo|carb[s]?)/i);
+    const carbsMatch = (macros || chunk).match(/(?:karbo|carb[s]?)[^\d,]*~?(\d+)\s*g/i) || (macros || chunk).match(/(\d+)\s*g[^\d,]*(?:karbo|carb[s]?)/i);
     // Extract fat — matches "25g lemak" OR "lemak: 25g" OR "25g fat" OR "fat 25g"
-    const fatMatch = (macros || chunk).match(/(?:lemak|fat)\W*~?(\d+)\s*g/i) || (macros || chunk).match(/(\d+)\s*g\W*(?:lemak|fat)/i);
+    const fatMatch = (macros || chunk).match(/(?:lemak|fat)[^\d,]*~?(\d+)\s*g/i) || (macros || chunk).match(/(\d+)\s*g[^\d,]*(?:lemak|fat)/i);
     // Extract food items — lines that aren't macros/labels
     const macroLineRegex = /^~?\d+\s*(kal|kcal|kkal|cal)/i;
     const proteinLineRegex = /^protein/i;

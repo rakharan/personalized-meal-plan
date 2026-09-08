@@ -42,6 +42,10 @@
     generating = true;
     error = '';
     cookingSteps = '';
+    // Clear current plan to show skeleton loading
+    if (lastPlan) {
+      lastPlan = { ...lastPlan, planText: '', meals: [] };
+    }
     try {
       const res = await fetch('/api/plans/generate', {
         method: 'POST',
@@ -55,6 +59,8 @@
       lastPlan = { planText: data.plan, cuisine: data.cuisine, created: new Date().toISOString(), meals: data.meals || [] };
     } catch (e: any) {
       error = e.message;
+      // Restore old plan on failure
+      await loadProfile();
     } finally {
       generating = false;
     }
@@ -203,14 +209,15 @@
     };
   }
 
-  // Parsed meals for plate + derived totals
-  let meals = $derived(parseMeals(lastPlan?.planText || ''));
+  // Use server-parsed meals if available, fallback to frontend parser
+  let meals = $derived(lastPlan?.meals?.length ? lastPlan.meals : parseMeals(lastPlan?.planText || ''));
   let totals = $derived(
     meals.reduce(
-      (acc, meal) => {
-        const m = macrosOf(meal);
-        acc.kcal += m.kcal;
-        acc.protein += m.protein;
+      (acc, meal: any) => {
+        acc.kcal += meal.kcal || 0;
+        acc.protein += meal.protein || 0;
+        acc.carbs += meal.carbs || 0;
+        acc.fat += meal.fat || 0;
         return acc;
       },
       { kcal: 0, protein: 0 },
@@ -279,7 +286,7 @@
     </div>
 
     <!-- ═══ Plate Section ═══ -->
-    {#if lastPlan && meals.length > 0}
+    {#if lastPlan && (meals.length > 0 || generating)}
       <section class="plate-section">
         <!-- Streak bar above plate -->
         {#if (profile.streak_days || 0) > 0}
@@ -332,7 +339,34 @@
 
       <!-- ═══ Meal Details (selected or all) ═══ -->
       <section class="meal-details">
-        {#if selectedMealIdx !== null && meals[selectedMealIdx]}
+        {#if generating}
+          <div class="detail-header">
+            <div class="detail-cuisine">
+              <span class="cuisine-emoji">⏳</span>
+              <div>
+                <span class="cuisine-label">Tunggu bentar</span>
+                <h2 class="cuisine-name">Lagi nyiapin rencana...</h2>
+              </div>
+            </div>
+          </div>
+          <div class="plan-body">
+            <div class="meals-grid">
+              {#each [0, 1, 2] as i}
+                <article class="meal-card">
+                  <header class="meal-header">
+                    <div class="skel-line skel-title"></div>
+                    <div class="skel-line skel-badge"></div>
+                  </header>
+                  <div class="meal-body">
+                    <div class="skel-line skel-w90"></div>
+                    <div class="skel-line skel-w70"></div>
+                    <div class="skel-line skel-w50"></div>
+                  </div>
+                </article>
+              {/each}
+            </div>
+          </div>
+        {:else if selectedMealIdx !== null && meals[selectedMealIdx]}
           <div class="detail-header">
             <button class="detail-back" onclick={() => selectedMealIdx = null}>← Semua</button>
             <span class="detail-cuisine">{cuisineEmoji(lastPlan.cuisine)} {lastPlan.cuisine || 'Rencana'}</span>
@@ -909,4 +943,22 @@
     .segment-label, .plate { transition: none; }
     .segment-label:hover { transform: translate(-50%, -50%); }
   }
+
+  /* Skeleton loading */
+  .skel-line {
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%; border-radius: var(--radius-sm);
+    animation: shimmer 1.5s infinite;
+  }
+  .skel-title { height: 20px; width: 120px; }
+  .skel-badge { height: 20px; width: 60px; }
+  .skel-w90 { height: 16px; width: 90%; margin-bottom: var(--space-2); }
+  .skel-w70 { height: 16px; width: 70%; margin-bottom: var(--space-2); }
+  .skel-w50 { height: 16px; width: 50%; }
+  .meal-card { background: var(--surface); border-radius: var(--radius-md); padding: var(--space-4); border: 1px solid var(--border); }
+  .meal-header { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
+  .meal-body { display: flex; flex-direction: column; gap: 0; }
+  .meals-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skel-line { animation: none; } }
 </style>

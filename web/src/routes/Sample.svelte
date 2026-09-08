@@ -9,7 +9,7 @@
   const plans = [
     {
       cuisine: 'Masakan Indonesia',
-      flag: '🇮🇩',
+      flag: '🍛',
       emoji: '🍛',
       target: '1500 kal · 100g protein',
       meals: [
@@ -31,7 +31,7 @@
     },
     {
       cuisine: 'Masakan Jepang',
-      flag: '🇯🇵',
+      flag: '🍱',
       emoji: '🍱',
       target: '1500 kal · 95g protein',
       meals: [

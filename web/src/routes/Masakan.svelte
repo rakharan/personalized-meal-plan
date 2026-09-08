@@ -9,7 +9,7 @@
   const cuisines = [
     {
       name: 'Indonesia',
-      flag: '🇮🇩',
+      flag: '🍛',
       emoji: '🍛',
       tagline: 'Bumbu kuat, sayuran lokal, nasi',
       desc: 'Saji paling tiap hari. Tempe, ayam bakar kecap, sayur asem, kangkung, ikan kembung. Bumbu yang bikin kangen rumah.',
@@ -18,7 +18,7 @@
     },
     {
       name: 'Jepang',
-      flag: '🇯🇵',
+      flag: '🍱',
       emoji: '🍱',
       tagline: 'Seimbang, umami, porsi kecil',
       desc: 'Tamago, teriyaki, miso soup, onigiri. Porsi kecil tapi kenyang. Banyak protein, sayuran, dan karbo dari nasi. Umami jadi kunci.',
@@ -27,7 +27,7 @@
     },
     {
       name: 'Korea',
-      flag: '🇰🇷',
+      flag: '🍲',
       emoji: '🍲',
       tagline: 'Pedas, fermentasi, kimchi',
       desc: 'Kimchi, bulgogi, bibimbap. Banyak sayur fermentasi dan daging grill. Rasa pedas dan asam khas. Sehat karena fermentasi.',
@@ -45,7 +45,7 @@
     },
     {
       name: 'Thai',
-      flag: '🇹🇭',
+      flag: '🍜',
       emoji: '🍜',
       tagline: 'Pedas manis, coconut milk',
       desc: 'Pad thai, tom yum, green curry. Aromatik dan pedas. Banyak coconut milk dan herba segar. Kaya rasa: pedas, manis, asam, asin sekaligus.',
@@ -54,7 +54,7 @@
     },
     {
       name: 'Vietnam',
-      flag: '🇻🇳',
+      flag: '🥢',
       emoji: '🥢',
       tagline: 'Ringan, segar, herbs',
       desc: 'Pho, banh mi, goi cuon. Ringan dan segar. Banyak herba segar, rice paper, dan broth bening. Cocok kalau mau makan enak tapi nggak berat.',
@@ -63,7 +63,7 @@
     },
     {
       name: 'India',
-      flag: '🇮🇳',
+      flag: '🫓',
       emoji: '🫓',
       tagline: 'Bumbu kaya, kari, lentil',
       desc: 'Dal, chicken curry, roti. Bumbu kaya dan kompleks. Banyak lentil dan kacang-kacangan untuk protein. Vegetarian-friendly.',
@@ -72,7 +72,7 @@
     },
     {
       name: 'Meksiko',
-      flag: '🇲🇽',
+      flag: '🌮',
       emoji: '🌮',
       tagline: 'Tortilla, bean, cabai, lime',
       desc: 'Tacos, burrito bowl, fajita. Tortilla, beans, dan banyak cabai. Asam dari lime, segar dari salsa. Kenyang dari beans dan jagung.',

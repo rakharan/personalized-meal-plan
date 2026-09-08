@@ -26,6 +26,7 @@
   function logout() {
     auth.logout();
     window.location.hash = '#/';
+    window.location.reload();
   }
 </script>
 
