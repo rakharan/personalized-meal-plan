@@ -2,6 +2,7 @@
 
 class ApiState {
   baseUrl = $state('');
+  authVersion = $state(0); // bump to trigger reactivity
 
   async request(path: string, opts: RequestInit = {}): Promise<any> {
     const url = `${this.baseUrl}${path}`;
@@ -21,18 +22,23 @@ class ApiState {
     localStorage.setItem('saji-admin-token', token);
     try {
       await this.getStats();
+      this.authVersion++;
       return true;
     } catch {
       localStorage.removeItem('saji-admin-token');
+      this.authVersion++;
       return false;
     }
   }
 
   logout() {
     localStorage.removeItem('saji-admin-token');
+    this.authVersion++;
   }
 
   get isAuthed(): boolean {
+    // Read authVersion to make this reactive
+    this.authVersion;
     return !!localStorage.getItem('saji-admin-token');
   }
 
@@ -50,8 +56,9 @@ class ApiState {
     return this.request('/api/overview', { headers: this.authHeaders() });
   }
 
-  async getUsers(page = 1): Promise<any> {
-    return this.request(`/api/users?page=${page}`, { headers: this.authHeaders() });
+  async getUsers(page = 1, search = ''): Promise<any> {
+    const q = search ? `&q=${encodeURIComponent(search)}` : '';
+    return this.request(`/api/users?page=${page}${q}`, { headers: this.authHeaders() });
   }
 
   async getPlans(): Promise<any> {
@@ -72,6 +79,10 @@ class ApiState {
 
   async getMetrics(): Promise<any> {
     return this.request('/api/metrics', { headers: this.authHeaders() });
+  }
+
+  async getDashboard(): Promise<any> {
+    return this.request('/api/dashboard', { headers: this.authHeaders() });
   }
 }
 

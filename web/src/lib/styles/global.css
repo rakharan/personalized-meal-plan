@@ -77,3 +77,26 @@ table, .stat-num, .bar-row .val {
     transition: none !important;
   }
 }
+
+/* ── Saji logo — text wordmark with amber underline ── */
+.saji-logo {
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight);
+  color: var(--primary);
+  text-decoration: none;
+  position: relative;
+  line-height: 1;
+  display: inline-block;
+}
+.saji-logo::after {
+  content: '';
+  position: absolute;
+  bottom: -0.25em;
+  left: 0;
+  right: 28%;
+  height: 0.13em;
+  background: var(--accent);
+  border-radius: 0.07em;
+}
+.saji-logo.cream { color: var(--text); }
+.saji-logo.cream::after { background: var(--accent); }

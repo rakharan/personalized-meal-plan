@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { Telegraf, session, Markup } from 'telegraf';
 import {
     generateMealPlan, generateShoppingList, generateMacros, parseCuisine,
-    generateWeeklyPlan, generateCookingSteps, setUsageCallback,
+    generateWeeklyPlan, generateCookingSteps, setUsageCallback, regenerateMeal,
 } from './llmClient.js';
 import {
     saveUser, getUser, ensureUser, setSubscribed, getSubscribedUsers,
@@ -12,8 +12,10 @@ import {
     pgSessionStore, checkRateLimit, incrementPlanCount, logUsage,
     createReferral, getReferralCount,
     getUserByTelegramChatId,
+    saveBotPlan, getBotPlanHistory, getBotPlanByDate, updateBotPlanMeals,
+    logPush, parsePlanMeals,
 } from './store.js';
-import type { Answers, User } from './store.js';
+import type { Answers, User, ParsedMeal } from './store.js';
 import {
     sanitizeText, validateCalories, validateProtein, validateTimeFormat,
     validatePlanName,
@@ -42,6 +44,7 @@ interface SessionState {
     awaitingPlanName?: boolean;
     editingField?: string;
     lastPlanText?: string;
+    lastBotPlanId?: number;
 }
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -200,6 +203,39 @@ const I18N: Record<string, Record<Locale, string | ((...args: any[]) => string)>
         en: 'Protein must be 20–500g. Try again?',
         id: 'Protein harus 20–500g. Coba lagi?',
     },
+    today_none: {
+        en: 'No plan today yet. /mealplan to make one.',
+        id: 'Belum ada rencana hari ini. /mealplan untuk buat.',
+    },
+    yesterday_none: {
+        en: 'No plan from yesterday.',
+        id: 'Nggak ada rencana kemarin.',
+    },
+    summary_title: { en: '📊 This Week', id: '📊 Minggu Ini' },
+    summary_plans: {
+        en: (n: number) => `${n} plans generated`,
+        id: (n: number) => `${n} rencana dibuat`,
+    },
+    summary_streak: {
+        en: (n: number) => `🔥 ${n} day streak`,
+        id: (n: number) => `🔥 ${n} hari beruntun`,
+    },
+    summary_cuisine: { en: 'Top cuisine', id: 'Masakan teratas' },
+    summary_avg_cal: { en: 'Avg calories', id: 'Rata-rata kalori' },
+    nudge_msg: {
+        en: 'Hey! No plan yet today. Want me to make one?',
+        id: 'Hai! Belum ada rencana makan hari ini. Mau aku bikinin?',
+    },
+    nudge_btn: { en: '✅ Yes please', id: '✅ Gas!' },
+    regen_pick: { en: 'Which meal to replace?', id: 'Mau ganti yang mana?' },
+    rate_remaining: {
+        en: (n: number) => `(${n} left today)`,
+        id: (n: number) => `(sisa ${n} hari ini)`,
+    },
+    nl_detect: {
+        en: (pref: string) => `Got it — making a plan with: ${pref}...`,
+        id: (pref: string) => `Oke — bikin rencana dengan: ${pref}...`,
+    },
 };
 
 const STEP_ORDER: StepKey[] = ['goal', 'restrictions', 'allergies', 'calories', 'mealsPerDay', 'protein', 'cuisine', 'preview'];
@@ -325,7 +361,75 @@ function planActionKeyboard(locale: string) {
             { text: t(locale, 'good'), callback_data: 'action_good' },
             { text: t(locale, 'bad'), callback_data: 'action_bad' },
         ],
+        [
+            { text: '🔄 ' + (locale === 'id' ? 'Ganti 1 meal' : 'Replace meal'), callback_data: 'action_regen' },
+        ],
     ]);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// HTML formatting helpers
+// ────────────────────────────────────────────────────────────────────────────
+function escapeHtml(s: string): string {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function formatPlanHTML(planText: string, meals: ParsedMeal[], locale: string): string {
+    if (meals && meals.length > 0) {
+        const blocks = meals.map((m) => {
+            const items = (m.items && m.items.length > 0)
+                ? m.items.map((i) => `• ${escapeHtml(i)}`).join('\n')
+                : escapeHtml(m.body || '');
+            const macroLine = m.macros ? `<code>${escapeHtml(m.macros)}</code>` : '';
+            return `<b>🍳 ${escapeHtml(m.name)}</b>${m.kcal ? ` (~${m.kcal} kkal, ${m.protein}g protein)` : ''}\n${items}${macroLine ? '\n' + macroLine : ''}`;
+        });
+        const totKcal = meals.reduce((s, m) => s + (m.kcal || 0), 0);
+        const totPro = meals.reduce((s, m) => s + (m.protein || 0), 0);
+        const totCarb = meals.reduce((s, m) => s + (m.carbs || 0), 0);
+        const totFat = meals.reduce((s, m) => s + (m.fat || 0), 0);
+        const totalLine = `\n<b>Total: ${totKcal} kal · ${totPro}g protein · ${totCarb}g karbo · ${totFat}g lemak</b>`;
+        return blocks.join('\n\n') + '\n' + totalLine;
+    }
+    // Fallback: plain text, escaped
+    return escapeHtml(planText);
+}
+
+function formatMacrosFromPlan(meals: ParsedMeal[], locale: string): string {
+    if (!meals || meals.length === 0) return '';
+    const lines = meals.map((m) =>
+        `📊 ${m.name}: ${m.kcal || 0} kal, ${m.protein || 0}g protein, ${m.carbs || 0}g karbo, ${m.fat || 0}g lemak`,
+    );
+    const totKcal = meals.reduce((s, m) => s + (m.kcal || 0), 0);
+    const totPro = meals.reduce((s, m) => s + (m.protein || 0), 0);
+    const totCarb = meals.reduce((s, m) => s + (m.carbs || 0), 0);
+    const totFat = meals.reduce((s, m) => s + (m.fat || 0), 0);
+    lines.push(`\n📊 Total: ${totKcal} kal, ${totPro}g protein, ${totCarb}g karbo, ${totFat}g lemak`);
+    return lines.join('\n');
+}
+
+// Replace a single meal chunk in planText — mirrors api.ts logic.
+function replaceMealInPlan(planText: string, mealName: string, newMealText: string): string {
+    const cleanText = planText.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1');
+    const mealNames = 'Sarapan|Breakfast|Makan\\s+siang|Lunch|Makan\\s+malam|Dinner|Snack|Camilan|Brunch';
+    const mealRegex = new RegExp(`((?:${mealNames}))`, 'gi');
+    const splits: { name: string; start: number; end: number }[] = [];
+    let match;
+    while ((match = mealRegex.exec(cleanText)) !== null) {
+        splits.push({ name: match[1].trim(), start: match.index, end: 0 });
+    }
+    for (let i = 0; i < splits.length; i++) {
+        splits[i].end = i + 1 < splits.length ? splits[i + 1].start : cleanText.length;
+    }
+    const target = splits.find((s) => s.name.toLowerCase().includes(mealName.toLowerCase()));
+    if (target) {
+        const before = cleanText.slice(0, target.start);
+        const after = cleanText.slice(target.end);
+        return before + newMealText.trim() + '\n' + after;
+    }
+    return cleanText + '\n' + newMealText.trim();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -358,8 +462,9 @@ async function generateAndSend(ctx: any, answers: Record<string, any>, opts: { r
     const avoidCuisines = user?.lastCuisines || [];
 
     // Rate limit check — free tier: 3/day, premium: 50/day
+    let rl: { allowed: boolean; limit: number; remaining: number } | null = null;
     if (chatId) {
-        const rl = await checkRateLimit(chatId, user?.tier || 'free');
+        rl = await checkRateLimit(chatId, user?.tier || 'free');
         if (!rl.allowed) {
             await ctx.reply(t(locale, 'rate_limited', rl.limit));
             return;
@@ -372,7 +477,21 @@ async function generateAndSend(ctx: any, answers: Record<string, any>, opts: { r
         }, chatId);
         // Store plan text in session so shop/macros/cook can reuse it — no second LLM call
         if (ctx.session) ctx.session.lastPlanText = plan;
-        await sendLong((txt) => ctx.reply(txt), plan);
+
+        // Parse meals for HTML formatting + bot plan history — no extra LLM call
+        const meals = parsePlanMeals(plan);
+        const cuisine = parseCuisine(plan);
+        if (chatId) {
+            const planId = await saveBotPlan(chatId, plan, cuisine, JSON.stringify(meals));
+            if (ctx.session) ctx.session.lastBotPlanId = planId;
+        }
+        const html = formatPlanHTML(plan, meals, locale);
+        await sendLong((txt) => ctx.reply(txt, { parse_mode: 'HTML' }), html);
+
+        // Rate limit display — show remaining if low
+        if (rl && rl.remaining <= 2) {
+            await ctx.reply(t(locale, 'rate_remaining', rl.remaining));
+        }
 
         if (chatId) {
             const today = new Date().toISOString().slice(0, 10);
@@ -393,9 +512,8 @@ async function generateAndSend(ctx: any, answers: Record<string, any>, opts: { r
             if (streak > 0) {
                 await ctx.reply(t(locale, 'streak_msg', streak));
             }
-            const c = parseCuisine(plan);
-            if (c) {
-                const cuisines = [...avoidCuisines, c].slice(-5);
+            if (cuisine) {
+                const cuisines = [...avoidCuisines, cuisine].slice(-5);
                 await setLastCuisines(chatId, cuisines);
             }
         }
@@ -628,6 +746,136 @@ bot.command('invite', async (ctx: any) => {
     await ctx.reply(`${t(locale, 'invite_msg', refLink)}\n${t(locale, 'invite_count', count)}`);
 });
 
+bot.command('today', async (ctx: any) => {
+    const locale = getLocale(ctx);
+    const today = new Date().toISOString().slice(0, 10);
+    const plan = await getBotPlanByDate(ctx.chat.id, today);
+    if (!plan) {
+        await ctx.reply(t(locale, 'today_none'));
+        return;
+    }
+    const meals = plan.meals_json ? JSON.parse(plan.meals_json) : parsePlanMeals(plan.plan_text);
+    const html = formatPlanHTML(plan.plan_text, meals, locale);
+    await sendLong((txt) => ctx.reply(txt, { parse_mode: 'HTML' }), html);
+    if (ctx.session) ctx.session.lastPlanText = plan.plan_text;
+    ctx.session.lastBotPlanId = plan.id;
+    await ctx.reply(t(locale, 'done'), planActionKeyboard(locale));
+});
+
+bot.command('yesterday', async (ctx: any) => {
+    const locale = getLocale(ctx);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const plan = await getBotPlanByDate(ctx.chat.id, yesterday);
+    if (!plan) {
+        await ctx.reply(t(locale, 'yesterday_none'));
+        return;
+    }
+    const meals = plan.meals_json ? JSON.parse(plan.meals_json) : parsePlanMeals(plan.plan_text);
+    const html = formatPlanHTML(plan.plan_text, meals, locale);
+    await sendLong((txt) => ctx.reply(txt, { parse_mode: 'HTML' }), html);
+});
+
+bot.command('summary', async (ctx: any) => {
+    const locale = getLocale(ctx);
+    const history = await getBotPlanHistory(ctx.chat.id, 30);
+    // Filter last 7 days
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const recent = history.filter((h) => {
+        const d = new Date(h.created_at).toISOString().slice(0, 10);
+        return d >= sevenDaysAgo;
+    });
+    if (recent.length === 0) {
+        await ctx.reply(locale === 'id' ? 'Belum ada rencana minggu ini.' : 'No plans this week yet.');
+        return;
+    }
+    // Stats
+    const plans = recent.length;
+    // Streak: count consecutive days with a plan ending today
+    const today = new Date().toISOString().slice(0, 10);
+    let streak = 0;
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        if (recent.some((h) => new Date(h.created_at).toISOString().slice(0, 10) === d)) {
+            streak++;
+        } else {
+            if (d !== today) break;
+        }
+    }
+    // Top cuisine
+    const cuisineCount: Record<string, number> = {};
+    for (const h of recent) {
+        const c = h.cuisine || 'unknown';
+        cuisineCount[c] = (cuisineCount[c] || 0) + 1;
+    }
+    const topCuisine = Object.entries(cuisineCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+    // Avg calories
+    let totalKcal = 0;
+    let kcalCount = 0;
+    for (const h of recent) {
+        const meals = h.meals_json ? JSON.parse(h.meals_json) : [];
+        const sum = meals.reduce((s: number, m: any) => s + (m.kcal || 0), 0);
+        if (sum > 0) { totalKcal += sum; kcalCount++; }
+    }
+    const avgCal = kcalCount > 0 ? Math.round(totalKcal / kcalCount) : 0;
+    const lines = [
+        t(locale, 'summary_title'),
+        '',
+        t(locale, 'summary_plans', plans),
+        t(locale, 'summary_streak', streak),
+        `${t(locale, 'summary_cuisine')}: ${topCuisine}`,
+        `${t(locale, 'summary_avg_cal')}: ${avgCal} kal`,
+    ];
+    await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
+});
+
+bot.command('regen', async (ctx: any) => {
+    const locale = getLocale(ctx);
+    const nameArg = ctx.message?.text?.split(' ').slice(1).join(' ').trim();
+    const planText = ctx.session?.lastPlanText;
+    if (!planText) {
+        await ctx.reply(t(locale, 'need_mealplan'));
+        return;
+    }
+    const meals = parsePlanMeals(planText);
+    if (meals.length === 0) {
+        await ctx.reply(t(locale, 'err', 'no meals parsed'));
+        return;
+    }
+    if (nameArg) {
+        // Direct regen of named meal
+        const user = await getUser(ctx.chat.id);
+        const answers = user?.lastAnswers || ctx.session?.answers || {};
+        await ctx.reply(t(locale, 'generating'));
+        try {
+            const newMealText = await regenerateMeal(planText, nameArg, locale, answers, ctx.chat.id);
+            const updatedPlan = replaceMealInPlan(planText, nameArg, newMealText);
+            ctx.session.lastPlanText = updatedPlan;
+            const updatedMeals = parsePlanMeals(updatedPlan);
+            const cuisine = parseCuisine(updatedPlan);
+            const planId = ctx.session?.lastBotPlanId;
+            if (planId) {
+                await updateBotPlanMeals(planId, updatedPlan, JSON.stringify(updatedMeals));
+            } else {
+                const newId = await saveBotPlan(ctx.chat.id, updatedPlan, cuisine, JSON.stringify(updatedMeals));
+                ctx.session.lastBotPlanId = newId;
+            }
+            const html = formatPlanHTML(updatedPlan, updatedMeals, locale);
+            await sendLong((txt) => ctx.reply(txt, { parse_mode: 'HTML' }), html);
+            await ctx.reply(t(locale, 'done'), planActionKeyboard(locale));
+        } catch (err: any) {
+            console.error('Per-meal regen failed:', err);
+            await ctx.reply(t(locale, 'err', err.message));
+        }
+        return;
+    }
+    // No arg: show meal picker
+    const rows = meals.map((m) => [{
+        text: m.name,
+        callback_data: `regenmeal_${m.name}`,
+    }]);
+    await ctx.reply(t(locale, 'regen_pick'), Markup.inlineKeyboard(rows as any));
+});
+
 bot.command('help', async (ctx: any) => {
     const locale = getLocale(ctx);
     const lines = locale === 'id' ? [
@@ -636,6 +884,10 @@ bot.command('help', async (ctx: any) => {
         '📚 Perintah tersedia:',
         '',
         '/mealplan — buat rencana makan baru',
+        '/today — lihat rencana hari ini',
+        '/yesterday — lihat rencana kemarin',
+        '/summary — ringkasan minggu ini',
+        '/regen <meal> — regenerasi 1 meal saja',
         '/subscribe — langganan rencana harian otomatis',
         '/unsubscribe — berhenti langganan',
         '/settime — ubah jam kirim harian',
@@ -648,13 +900,18 @@ bot.command('help', async (ctx: any) => {
         '/invite — link ajak teman',
         '/help — tampilkan bantuan ini',
         '',
-        '💡 Setelah rencana dibuat, ada tombol: 🎲 Regenerasi, ✏️ Ubah, 💾 Simpan, 🛒 Belanja, 📊 Makro, 👍/👎',
+        '💡 Setelah rencana dibuat, ada tombol: 🎲 Regenerasi, ✏️ Ubah, 💾 Simpan, 🛒 Belanja, 📊 Makro, 👍/👎, 🔄 Ganti 1 meal',
+        '💬 Atau ketik langsung preferensimu (mis. "ayam pedas") untuk bikin rencana otomatis.',
     ] : [
         '🍽️ Saji — Daily Meal Plan Assistant',
         '',
         '📚 Available commands:',
         '',
         '/mealplan — build a new meal plan',
+        '/today — view today\'s plan',
+        '/yesterday — view yesterday\'s plan',
+        '/summary — weekly digest',
+        '/regen <meal> — regenerate a single meal',
         '/subscribe — get a fresh plan daily',
         '/unsubscribe — pause daily push',
         '/settime — change your daily push time',
@@ -667,7 +924,8 @@ bot.command('help', async (ctx: any) => {
         '/invite — get your referral link',
         '/help — show this help',
         '',
-        '💡 After a plan is generated, buttons appear: 🎲 Regenerate, ✏️ Edit, 💾 Save, 🛒 Shopping list, 📊 Macros, 👍/👎',
+        '💡 After a plan is generated, buttons appear: 🎲 Regenerate, ✏️ Edit, 💾 Save, 🛒 Shopping list, 📊 Macros, 👍/👎, 🔄 Replace meal',
+        '💬 Or just type your preference (e.g. "spicy chicken") to auto-generate a plan.',
     ];
     await ctx.reply(lines.join('\n'));
 });
@@ -879,18 +1137,28 @@ bot.on('callback_query', async (ctx: any) => {
                 : t(locale, 'macros_done');
             await ctx.reply(waitMsg);
             try {
-                // Reuse plan from session if available — avoids a second LLM call
-                const plan = ctx.session?.lastPlanText
-                    ?? await generateMealPlan(last, { locale, avoidCuisines: user?.lastCuisines || [] }, chatId);
-                if (action === 'shop') {
-                    const shop = await generateShoppingList(plan, locale, chatId);
-                    await sendLong((txt) => ctx.reply(txt), shop);
-                } else if (action === 'cook') {
-                    const steps = await generateCookingSteps(plan, locale, chatId);
-                    await sendLong((txt) => ctx.reply(txt), steps);
+                if (action === 'macros') {
+                    // No LLM call — derive from parsed plan meals
+                    const planText = ctx.session?.lastPlanText
+                        ?? await generateMealPlan(last, { locale, avoidCuisines: user?.lastCuisines || [] }, chatId);
+                    const meals = parsePlanMeals(planText);
+                    const macros = formatMacrosFromPlan(meals, locale);
+                    if (macros) {
+                        await sendLong((txt) => ctx.reply(txt, { parse_mode: 'HTML' }), macros);
+                    } else {
+                        await ctx.reply(t(locale, 'err', 'no meals parsed'));
+                    }
                 } else {
-                    const macros = await generateMacros(plan, locale, chatId);
-                    await sendLong((txt) => ctx.reply(txt), macros);
+                    // Reuse plan from session if available — avoids a second LLM call
+                    const plan = ctx.session?.lastPlanText
+                        ?? await generateMealPlan(last, { locale, avoidCuisines: user?.lastCuisines || [] }, chatId);
+                    if (action === 'shop') {
+                        const shop = await generateShoppingList(plan, locale, chatId);
+                        await sendLong((txt) => ctx.reply(txt), shop);
+                    } else if (action === 'cook') {
+                        const steps = await generateCookingSteps(plan, locale, chatId);
+                        await sendLong((txt) => ctx.reply(txt), steps);
+                    }
                 }
             } catch (err: any) {
                 console.error('Post-plan action failed:', err);
@@ -898,6 +1166,63 @@ bot.on('callback_query', async (ctx: any) => {
             }
             return;
         }
+        if (action === 'regen') {
+            // Show inline keyboard with meal names from current plan
+            const planText = ctx.session?.lastPlanText;
+            if (!planText) {
+                await ctx.reply(t(locale, 'need_mealplan'));
+                return;
+            }
+            const meals = parsePlanMeals(planText);
+            if (meals.length === 0) {
+                await ctx.reply(t(locale, 'err', 'no meals parsed'));
+                return;
+            }
+            const rows = meals.map((m) => [{
+                text: m.name,
+                callback_data: `regenmeal_${m.name}`,
+            }]);
+            await ctx.reply(t(locale, 'regen_pick'), Markup.inlineKeyboard(rows as any));
+            return;
+        }
+    }
+
+    // ── Per-meal regen ──
+    if (data.startsWith('regenmeal_')) {
+        const mealName = data.slice(11);
+        const planText = ctx.session?.lastPlanText;
+        if (!planText) {
+            await ctx.reply(t(locale, 'need_mealplan'));
+            return;
+        }
+        const user = await getUser(ctx.chat.id);
+        const answers = user?.lastAnswers || ctx.session?.answers || {};
+        await ctx.reply(t(locale, 'generating'));
+        try {
+            const newMealText = await regenerateMeal(planText, mealName, locale, answers, ctx.chat.id);
+            const updatedPlan = replaceMealInPlan(planText, mealName, newMealText);
+            ctx.session.lastPlanText = updatedPlan;
+            const meals = parsePlanMeals(updatedPlan);
+            const cuisine = parseCuisine(updatedPlan);
+            const planId = ctx.session?.lastBotPlanId;
+            if (planId) {
+                await updateBotPlanMeals(planId, updatedPlan, JSON.stringify(meals));
+            } else if (ctx.chat?.id) {
+                const newId = await saveBotPlan(ctx.chat.id, updatedPlan, cuisine, JSON.stringify(meals));
+                ctx.session.lastBotPlanId = newId;
+            }
+            if (cuisine) {
+                const cuisines = [...(user?.lastCuisines || []), cuisine].slice(-5);
+                await setLastCuisines(ctx.chat.id, cuisines);
+            }
+            const html = formatPlanHTML(updatedPlan, meals, locale);
+            await sendLong((txt) => ctx.reply(txt, { parse_mode: 'HTML' }), html);
+            await ctx.reply(t(locale, 'done'), planActionKeyboard(locale));
+        } catch (err: any) {
+            console.error('Per-meal regen failed:', err);
+            await ctx.reply(t(locale, 'err', err.message));
+        }
+        return;
     }
 
     // ── Load / delete saved plans ──
@@ -1054,6 +1379,35 @@ bot.on('text', async (ctx: any) => {
             ctx.session = session;
             return;
         }
+
+        // ── Natural language input — detect food preferences ──
+        const text = ctx.message.text.trim();
+        const FOOD_KEYWORDS = [
+            'pedas', 'ayam', 'sayur', 'ringan', 'berat', 'vegetarian', 'halal',
+            'beef', 'sapi', 'ikan', 'chicken', 'spicy', 'rice', 'nasi', 'mie',
+            'soup', 'sup', 'salad', 'egg', 'telur', 'tofu', 'tahu', 'tempe',
+            'kambing', 'domba', 'babi', 'kentang', 'pasta', 'pizza', 'burger',
+            'sehat', 'healthy', 'diet', 'cut', 'bulk', 'lean', 'high protein',
+            'rendah', 'karbo', 'low carb', 'keto', 'gluten', 'susu', 'keju',
+            'japanese', 'korean', 'chinese', 'indonesian', 'western', 'thai',
+            'mediterranean', 'indian', 'vietnam', 'medan', 'padang', 'sunda',
+            'betawi', 'bali', 'seafood', 'bakar', 'goreng', 'rebus', 'panggang',
+        ];
+        const lowerText = text.toLowerCase();
+        const looksLikeFood = text.length > 3
+            && !text.startsWith('/')
+            && FOOD_KEYWORDS.some((kw) => lowerText.includes(kw));
+        if (looksLikeFood) {
+            const user = await getUser(ctx.chat.id);
+            const answers = user?.lastAnswers || {};
+            answers.cuisine = text;
+            ctx.session.answers = answers;
+            ctx.session.step = 'idle';
+            await ctx.reply(t(locale, 'nl_detect', text));
+            await generateAndSend(ctx, answers);
+            ctx.session = session;
+            return;
+        }
     }
 
     await ctx.reply(t(getLocale(ctx), 'idle'));
@@ -1087,6 +1441,9 @@ async function pushDailyPlans(): Promise<void> {
                 avoidCuisines: sub.lastCuisines,
             }, sub.chatId);
             await deliverPlan(deliveryAdapters, sub.chatId, plan);
+            const cuisine = parseCuisine(plan);
+            await logPush(sub.chatId, 'sent', cuisine);
+            await saveBotPlan(sub.chatId, plan, cuisine, JSON.stringify(parsePlanMeals(plan)));
             await bumpStreak(sub.chatId);
             await setLastPushed(sub.chatId, today);
             await setLastAnswers(sub.chatId, sub.answers);
@@ -1095,19 +1452,49 @@ async function pushDailyPlans(): Promise<void> {
             if (streak > 0) {
                 await bot.telegram.sendMessage(sub.chatId, t(sub.locale, 'streak_msg', streak));
             }
-            const c = parseCuisine(plan);
-            if (c) {
-                const cuisines = [...(sub.lastCuisines || []), c].slice(-5);
+            if (cuisine) {
+                const cuisines = [...(sub.lastCuisines || []), cuisine].slice(-5);
                 await setLastCuisines(sub.chatId, cuisines);
             }
             console.log(`Pushed daily plan to ${sub.chatId}`);
-        } catch (err) {
+        } catch (err: any) {
             console.error(`Daily push failed for ${sub.chatId}:`, err);
+            await logPush(sub.chatId, 'failed', null, err.message);
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Smart nudge — remind subscribed users without today's plan at 11am WIB (UTC+7)
+// ────────────────────────────────────────────────────────────────────────────
+async function smartNudge(): Promise<void> {
+    const now = new Date();
+    // WIB = UTC+7 — check if current UTC time is 04:00 (11:00 WIB)
+    const utcHour = now.getUTCHours();
+    if (utcHour !== 4) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const subs = await getSubscribedUsers();
+    for (const sub of subs) {
+        // Skip users who already have today's plan
+        if (sub.lastPushed === today) continue;
+        try {
+            const existing = await getBotPlanByDate(sub.chatId, today);
+            if (existing) continue;
+            await bot.telegram.sendMessage(
+                sub.chatId,
+                t(sub.locale, 'nudge_msg'),
+                Markup.inlineKeyboard([
+                    [{ text: t(sub.locale, 'nudge_btn'), callback_data: 'cmd_mealplan' }],
+                ]),
+            );
+        } catch (err: any) {
+            console.error(`Nudge failed for ${sub.chatId}:`, err);
         }
     }
 }
 
 setInterval(() => { pushDailyPlans(); }, 60_000);
+setInterval(() => { smartNudge(); }, 60_000);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Startup
@@ -1118,6 +1505,10 @@ async function main() {
 
     await bot.telegram.setMyCommands([
         { command: 'mealplan', description: 'Build a new meal plan' },
+        { command: 'today', description: 'View today\'s plan' },
+        { command: 'yesterday', description: 'View yesterday\'s plan' },
+        { command: 'summary', description: 'Weekly digest' },
+        { command: 'regen', description: 'Regenerate a single meal' },
         { command: 'subscribe', description: 'Get a fresh plan pushed daily' },
         { command: 'unsubscribe', description: 'Stop daily push' },
         { command: 'settime', description: 'Change your daily push time' },

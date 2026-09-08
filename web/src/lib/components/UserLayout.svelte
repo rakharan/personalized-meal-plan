@@ -36,7 +36,7 @@
 {/if}
 
 <nav class="user-nav">
-  <a href="#/dashboard" class="brand">Sa<span>ji</span></a>
+  <a href="#/dashboard" class="brand"><span class="saji-logo">saji</span></a>
   <div class="nav-links" class:open={mobileNavOpen}>
     {#each navItems as item}
       <a href={item.href} class:active={current === item.href} onclick={closeMobileNav}>
@@ -67,7 +67,7 @@
     position: sticky; top: 0; z-index: 1001;
   }
   .brand { font-size: var(--fs-lg); font-weight: var(--fw-bold); letter-spacing: var(--ls-tight); color: var(--text); text-decoration: none; }
-  .brand span { color: var(--primary); }
+  .brand .saji-logo { font-size: var(--fs-lg); }
 
   .nav-links { display: flex; gap: var(--space-4); align-items: center; }
   .nav-links a {

@@ -35,7 +35,9 @@
 
   function logout() {
     api.logout();
+    // Force route re-evaluation (hashchange won't fire if already on #/admin-login)
     window.location.hash = '#/admin-login';
+    window.location.reload();
   }
 </script>
 

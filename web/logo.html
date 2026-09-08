@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saji Logo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+  
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    background: #1A1612;
+    color: #E8E0D5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 24px;
+  }
+
+  .header { text-align: center; margin-bottom: 48px; }
+  .header h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.03em; color: #E8E0D5; margin-bottom: 8px; }
+  .header p { font-size: 0.875rem; color: #6B6157; }
+
+  .logo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    max-width: 900px;
+    width: 100%;
+  }
+
+  .logo-card {
+    background: #241F1B;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 48px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    transition: border-color 0.15s;
+  }
+  .logo-card:hover { border-color: rgba(82,183,136,0.3); }
+  .logo-card.dark-bg { background: #1A1612; }
+  .logo-card.light-bg { background: #FDF8F3; }
+  .logo-card.warm-bg { background: #2D2823; }
+
+  /* Variant 1: Split color — Sa green, ji amber */
+  .v1 {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .v1 .sa { color: #52B788; }
+  .v1 .ji { color: #F59E0B; }
+
+  /* Variant 2: All amber with green dot */
+  .v2 {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    color: #F59E0B;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .v2 .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #52B788;
+    margin-left: 2px;
+    flex-shrink: 0;
+  }
+
+  /* Variant 3: All cream on dark, leaf accent */
+  .v3 {
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: #E8E0D5;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .v3 .leaf {
+    color: #52B788;
+    font-size: 0.7em;
+    margin-left: 4px;
+  }
+
+  /* Variant 4: Outline style */
+  .v4 {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    -webkit-text-stroke: 2px #52B788;
+    color: transparent;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  /* Variant 5: Lowercase with underline */
+  .v5 {
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: #52B788;
+    position: relative;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .v5::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    right: 30%;
+    height: 4px;
+    background: #F59E0B;
+    border-radius: 2px;
+  }
+
+  /* Variant 6: Split with divider line */
+  .v6 {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .v6 .sa { color: #52B788; }
+  .v6 .div {
+    width: 3px;
+    height: 0.8em;
+    background: #F59E0B;
+    margin: 0 2px;
+    border-radius: 2px;
+  }
+  .v6 .ji { color: #E8E0D5; }
+
+  /* Variant 7: Stamp/badge style */
+  .v7 {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: #FDF8F3;
+    background: #52B788;
+    padding: 12px 28px;
+    border-radius: 12px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .v7 .ji { color: #F59E0B; }
+
+  /* Variant 8: Minimal monospace */
+  .v8 {
+    font-size: 2.5rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: #E8E0D5;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    text-transform: uppercase;
+  }
+  .v8 .dot { color: #52B788; }
+
+  /* Variant 9: Warm gradient text */
+  .v9 {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    background: linear-gradient(135deg, #52B788 0%, #52B788 40%, #F59E0B 60%, #F59E0B 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .label {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    font-size: 0.65rem;
+    color: #6B6157;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+  }
+
+  .logo-card { position: relative; }
+
+  .footer {
+    margin-top: 48px;
+    text-align: center;
+    font-size: 0.75rem;
+    color: #6B6157;
+    max-width: 500px;
+  }
+  .footer a { color: #52B788; text-decoration: none; }
+
+  @media (max-width: 768px) {
+    .logo-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .v1, .v2, .v3, .v4, .v5, .v6, .v9 { font-size: 2.2rem; }
+    .v7 { font-size: 1.5rem; }
+    .v8 { font-size: 1.8rem; }
+  }
+  @media (max-width: 480px) {
+    .logo-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Saji Logo Concepts</h1>
+  <p>9 variants — Plus Jakarta Sans, Warm Kitchen palette</p>
+</div>
+
+<div class="logo-grid">
+  <div class="logo-card">
+    <span class="label">1. Split color</span>
+    <span class="v1"><span class="sa">Sa</span><span class="ji">ji</span></span>
+  </div>
+
+  <div class="logo-card">
+    <span class="label">2. Amber + green dot</span>
+    <span class="v2">Saji<span class="dot"></span></span>
+  </div>
+
+  <div class="logo-card">
+    <span class="label">3. Cream + leaf</span>
+    <span class="v3">Saji<span class="leaf">🍃</span></span>
+  </div>
+
+  <div class="logo-card dark-bg">
+    <span class="label">4. Outline</span>
+    <span class="v4">Saji</span>
+  </div>
+
+  <div class="logo-card warm-bg">
+    <span class="label">5. Underline</span>
+    <span class="v5">saji</span>
+  </div>
+
+  <div class="logo-card dark-bg">
+    <span class="label">6. Divider</span>
+    <span class="v6"><span class="sa">Sa</span><span class="div"></span><span class="ji">ji</span></span>
+  </div>
+
+  <div class="logo-card">
+    <span class="label">7. Badge</span>
+    <span class="v7">Sa<span class="ji">ji</span></span>
+  </div>
+
+  <div class="logo-card light-bg">
+    <span class="label">8. Monospace</span>
+    <span class="v8">SA<span class="dot">·</span>JI</span>
+  </div>
+
+  <div class="logo-card">
+    <span class="label">9. Gradient</span>
+    <span class="v9">Saji</span>
+  </div>
+</div>
+
+<div class="footer">
+  Click any variant to see it larger. Dark cards = #1A1612/#241F1B, light card = #FDF8F3.
+  Colors: leaf-green #52B788, amber #F59E0B, cream #E8E0D5.
+</div>
+
+</body>
+</html>

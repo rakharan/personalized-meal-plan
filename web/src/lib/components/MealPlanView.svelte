@@ -1,54 +1,25 @@
 <script lang="ts">
   import { auth } from '$lib/stores/auth.svelte';
 
-  let {
-    planText = $bindable(''),
-  }: {
-    planText?: string;
-  } = $props();
-
   interface Meal {
     name: string;
     body: string;
     macros?: string;
-    start: number;
-    end: number;
+    kcal: number;
+    protein: number;
+    items: string[];
   }
+
+  let {
+    planText = $bindable(''),
+    meals = $bindable<Meal[]>([]),
+  }: {
+    planText?: string;
+    meals?: Meal[];
+  } = $props();
 
   let regenerating = $state<string | null>(null);
   let error = $state('');
-
-  // Parse meals from plan text
-  function parseMeals(text: string): Meal[] {
-    if (!text) return [];
-    // Strip markdown bold/italic before matching
-    const clean = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1');
-    const mealRegex = /(?:^|\n)(?:🍳|🍱|🌙|☀️|🌅|🥗|🍲)?\s*((?:Sarapan|Breakfast|Makan\s+siang|Lunch|Makan\s+malam|Dinner|Snack|Camilan|Brunch))[^\n]*/gi;
-    const splits: { name: string; start: number }[] = [];
-    let match;
-    while ((match = mealRegex.exec(clean)) !== null) {
-      splits.push({ name: match[1].trim(), start: match.index });
-    }
-    if (splits.length === 0) return [];
-    const result: Meal[] = [];
-    for (let i = 0; i < splits.length; i++) {
-      const start = splits[i].start;
-      const end = i + 1 < splits.length ? splits[i + 1].start : clean.length;
-      const chunk = clean.slice(start, end).trim();
-      const macroMatch = chunk.match(/(~?\d+\s*(?:kal|kcal|kkal|cal).*?protein.*?\d+\s*g)/i);
-      const macros = macroMatch ? macroMatch[1] : '';
-      const body = chunk.replace(mealRegex, '').trim();
-      result.push({ name: splits[i].name, body: body || chunk, macros, start, end });
-    }
-    return result;
-  }
-
-  let meals = $state<Meal[]>([]);
-
-  // Re-parse when planText changes
-  $effect(() => {
-    meals = parseMeals(planText);
-  });
 
   async function regenerateMeal(meal: Meal) {
     regenerating = meal.name;
@@ -64,22 +35,9 @@
         throw new Error(d.error || 'Gagal regenerasi');
       }
       const data = await res.json();
-      const newChunk = data.meal.trim();
-
-      // Replace the meal chunk in planText using the meal's current
-      // start/end indices. Re-parse to get fresh indices first (in case
-      // a prior regeneration shifted them). Use cleaned text for matching.
-      const cleanText = planText.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1');
-      const freshMeals = parseMeals(planText);
-      const freshMeal = freshMeals.find(m => m.name === meal.name);
-      if (freshMeal) {
-        const before = cleanText.slice(0, freshMeal.start);
-        const after = cleanText.slice(freshMeal.end);
-        planText = before + newChunk + '\n' + after;
-      } else {
-        // Fallback: append the regenerated meal at the end
-        planText = planText + '\n' + newChunk;
-      }
+      // Server returns full updated planText + structured meals
+      if (data.planText) planText = data.planText;
+      if (data.meals) meals = data.meals;
     } catch (e: any) {
       error = e.message;
     } finally {
@@ -87,357 +45,208 @@
     }
   }
 
-  // ── Derived display helpers (pure, no state mutation) ──
-  // Split meal body into food-item lines; drop the macros line if it leaked in.
-  function foodItems(meal: Meal): string[] {
-    return meal.body
-      .split('\n')
-      .map((l) => l.replace(/^[•\-\*\u2022]\s*/, '').trim())
-      .filter((l) => l.length > 0 && !/^~?\d+\s*(kal|kcal|kkal|cal)/i.test(l));
-  }
-
-  // Extract numeric calories + protein grams from a macros string.
-  function macrosOf(meal: Meal): { kcal: number; protein: number } {
-    const m = meal.macros || '';
-    const kcalMatch = m.match(/~?(\d+)\s*(?:kal|kcal|kkal|cal)/i);
-    const proteinMatch = m.match(/protein\s*~?(\d+)\s*g/i);
-    return {
-      kcal: kcalMatch ? parseInt(kcalMatch[1], 10) : 0,
-      protein: proteinMatch ? parseInt(proteinMatch[1], 10) : 0,
-    };
-  }
-
   let totals = $derived(
-    meals.reduce(
+    (meals || []).reduce(
       (acc, meal) => {
-        const m = macrosOf(meal);
-        acc.kcal += m.kcal;
-        acc.protein += m.protein;
+        acc.kcal += meal.kcal || 0;
+        acc.protein += meal.protein || 0;
+        acc.carbs += meal.carbs || 0;
+        acc.fat += meal.fat || 0;
         return acc;
       },
-      { kcal: 0, protein: 0 },
+      { kcal: 0, protein: 0, carbs: 0, fat: 0 },
     ),
   );
 </script>
 
 {#if error}
   <div class="meal-error" role="alert">
-    <span class="error-icon">⚠️</span>
+    <span class="error-icon">!</span>
     <span>{error}</span>
   </div>
 {/if}
 
-{#if meals.length === 0 || (meals.length === 1 && !meals[0].name)}
+{#if !meals || meals.length === 0}
   <pre class="plan-text">{planText}</pre>
 {:else}
   <div class="meals-grid">
     {#each meals as meal, i (meal.name + i)}
-      {@const items = foodItems(meal)}
-      {@const m = macrosOf(meal)}
-      <article class="meal-card">
-        <header class="meal-header">
-          <h3 class="meal-name">{meal.name}</h3>
-          <div class="meal-actions">
-            {#if m.kcal > 0}
-              <span class="badge badge-kcal">
-                <span class="badge-dot"></span>{m.kcal} kal
-              </span>
-            {/if}
-            {#if m.protein > 0}
-              <span class="badge badge-protein">
-                <span class="badge-dot"></span>{m.protein}g protein
-              </span>
-            {/if}
-            <button
-              class="regen-btn"
-              onclick={() => regenerateMeal(meal)}
-              disabled={regenerating === meal.name}
-              aria-label="Ganti {meal.name}"
-              title="Regenerasi {meal.name}"
-            >
-              {#if regenerating === meal.name}⏳{:else}🔄{/if}
-            </button>
+      <article class="meal-card" class:regenerating={regenerating === meal.name}>
+        {#if regenerating === meal.name}
+          <!-- Skeleton for this card while regenerating -->
+          <header class="meal-header">
+            <div class="skel-line skel-title"></div>
+            <div class="skel-line skel-badge"></div>
+          </header>
+          <div class="meal-body">
+            <div class="skel-line skel-w90"></div>
+            <div class="skel-line skel-w70"></div>
+            <div class="skel-line skel-w50"></div>
           </div>
-        </header>
+        {:else}
+          <header class="meal-header">
+            <h3 class="meal-name">{meal.name}</h3>
+            <div class="meal-actions">
+              {#if meal.kcal > 0}
+                <span class="badge badge-kcal">
+                  <span class="badge-dot"></span>{meal.kcal} kal
+                </span>
+              {/if}
+              {#if meal.protein > 0}
+                <span class="badge badge-protein">
+                  <span class="badge-dot"></span>{meal.protein}g protein
+                </span>
+              {/if}
+              {#if meal.carbs > 0}
+                <span class="badge badge-carbs">
+                  <span class="badge-dot"></span>{meal.carbs}g karbo
+                </span>
+              {/if}
+              {#if meal.fat > 0}
+                <span class="badge badge-fat">
+                  <span class="badge-dot"></span>{meal.fat}g lemak
+                </span>
+              {/if}
+              <button
+                class="regen-btn"
+                onclick={() => regenerateMeal(meal)}
+                disabled={regenerating === meal.name}
+                aria-label="Ganti {meal.name}"
+                title="Regenerasi {meal.name}"
+              >
+                {#if regenerating === meal.name}...{:else}↻{/if}
+              </button>
+            </div>
+          </header>
 
-        <div class="meal-body">
-          {#if items.length > 0}
-            <ul class="food-list">
-              {#each items as item}
-                <li class="food-item">
-                  <span class="food-bullet" aria-hidden="true">●</span>
-                  <span class="food-text">{item}</span>
-                </li>
-              {/each}
-            </ul>
-          {:else}
-            <pre class="food-raw">{meal.body}</pre>
-          {/if}
-        </div>
+          <div class="meal-body">
+            {#if meal.items && meal.items.length > 0}
+              <ul class="food-list">
+                {#each meal.items as item}
+                  <li class="food-item">
+                    <span class="food-bullet" aria-hidden="true">●</span>
+                    <span class="food-text">{item}</span>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <pre class="food-raw">{meal.body}</pre>
+            {/if}
+            {#if meal.macros}
+              <div class="meal-macros">{meal.macros}</div>
+            {/if}
+          </div>
+        {/if}
       </article>
     {/each}
   </div>
 
   <div class="daily-total" role="status">
-    <span class="total-label">Total Hari Ini</span>
-    <div class="total-stats">
-      {#if totals.kcal > 0}
-        <span class="total-stat total-kcal">
-          <span class="total-num">{totals.kcal}</span>
-          <span class="total-unit">kalori</span>
-        </span>
-      {/if}
-      {#if totals.protein > 0}
-        <span class="total-stat total-protein">
-          <span class="total-num">{totals.protein}g</span>
-          <span class="total-unit">protein</span>
-        </span>
-      {/if}
-    </div>
+    <span class="total-label">Total hari ini</span>
+    <span class="total-kcal">{totals.kcal} kal</span>
+    <span class="total-sep">·</span>
+    <span class="total-protein">{totals.protein}g protein</span>
+    <span class="total-sep">·</span>
+    <span class="total-carbs">{totals.carbs}g karbo</span>
+    <span class="total-sep">·</span>
+    <span class="total-fat">{totals.fat}g lemak</span>
   </div>
 {/if}
 
 <style>
-  /* ── Meal grid ── */
-  .meals-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
+  .meal-error {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-3) var(--space-4); margin-bottom: var(--space-4);
+    background: var(--danger-soft); border-radius: var(--radius-md);
+    border: 1px solid var(--danger); color: var(--danger); font-size: var(--fs-sm);
   }
-  @media (min-width: 720px) {
-    .meals-grid { grid-template-columns: repeat(2, 1fr); }
+  .error-icon {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--danger);
+    color: var(--text-on-danger); display: flex; align-items: center; justify-content: center;
+    font-weight: var(--fw-bold); font-size: var(--fs-xs); flex-shrink: 0;
   }
 
-  /* ── Meal card: warm dark surface, organic corners, hover lift ── */
-  .meal-card {
-    background: var(--surface);
+  .plan-text {
+    white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono);
+    font-size: var(--fs-sm); color: var(--text-muted); line-height: var(--lh-relaxed);
+    background: var(--surface); padding: var(--space-4); border-radius: var(--radius-md);
     border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    transition:
-      transform var(--duration-small) var(--ease-standard),
-      box-shadow var(--duration-small) var(--ease-standard),
-      border-color var(--duration-small) var(--ease-standard);
-  }
-  .meal-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 28px rgba(26, 22, 18, 0.55), 0 0 0 1px var(--border-strong);
-    border-color: var(--border-strong);
   }
 
-  /* ── Header: ceramic-glaze warm gradient ── */
+  .meals-grid { display: flex; flex-direction: column; gap: var(--space-4); }
+
+  .meal-card {
+    background: var(--surface); border-radius: var(--radius-lg);
+    border: 1px solid var(--border); overflow: hidden;
+    transition: border-color var(--duration-micro) var(--ease-standard);
+  }
+  .meal-card.regenerating { border-color: var(--primary); }
+  .meal-card:hover { border-color: var(--border-strong); }
+
   .meal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-4) var(--space-5);
-    gap: var(--space-3);
-    flex-wrap: wrap;
-    background:
-      linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(82, 183, 136, 0.04) 100%),
-      var(--surface-2);
+    display: flex; justify-content: space-between; align-items: center;
+    gap: var(--space-2); padding: var(--space-3) var(--space-4);
     border-bottom: 1px solid var(--border);
   }
-  .meal-name {
-    margin: 0;
-    font-size: var(--fs-lg);
-    font-weight: var(--fw-semibold);
-    color: var(--primary);
-    text-transform: capitalize;
-    letter-spacing: var(--ls-snug);
-    line-height: var(--lh-tight);
-  }
-  .meal-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-  }
-
-  /* ── Macro badges: leaf-green + amber pills ── */
+  .meal-name { font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text); }
+  .meal-actions { display: flex; align-items: center; gap: var(--space-2); }
   .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-pill);
-    font-size: var(--fs-xs);
-    font-weight: var(--fw-semibold);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    line-height: 1.4;
+    display: inline-flex; align-items: center; gap: var(--space-1);
+    padding: 2px var(--space-2); border-radius: var(--radius-pill);
+    font-size: var(--fs-xs); font-weight: var(--fw-medium);
   }
-  .badge-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .badge-kcal {
-    background: var(--primary-soft);
-    color: var(--primary);
-  }
-  .badge-kcal .badge-dot { background: var(--primary); }
-  .badge-protein {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-  .badge-protein .badge-dot { background: var(--accent); }
-
-  /* ── Per-meal regenerate button ── */
+  .badge-kcal { background: var(--primary-soft); color: var(--primary); }
+  .badge-protein { background: var(--accent-soft); color: var(--accent); }
+  .badge-carbs { background: rgba(117, 198, 157, 0.12); color: var(--leaf-400); }
+  .badge-fat { background: rgba(245, 158, 11, 0.10); color: var(--amber-500); }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .regen-btn {
-    background: var(--surface-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
-    width: 34px;
-    height: 34px;
-    font-size: var(--fs-md);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    width: 32px; height: 32px; font-size: var(--fs-md); cursor: pointer; color: var(--text-subtle);
     transition: all var(--duration-micro) var(--ease-standard);
-    flex-shrink: 0;
-    padding: 0;
+    display: flex; align-items: center; justify-content: center;
   }
-  .regen-btn:not(:disabled):hover {
-    background: var(--accent-soft);
-    border-color: var(--accent);
-    transform: rotate(90deg);
-  }
-  .regen-btn:disabled { opacity: 0.5; cursor: wait; }
+  .regen-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .regen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  /* ── Meal body + food chips ── */
-  .meal-body {
-    padding: var(--space-4) var(--space-5);
-    flex: 1;
-  }
-  .food-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-  }
-  .food-item {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-3);
-    background: var(--surface-3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
-    font-size: var(--fs-sm);
-    color: var(--text-muted);
-    line-height: 1.4;
-    transition: all var(--duration-micro) var(--ease-standard);
-  }
-  .food-item:hover {
-    border-color: var(--primary);
-    color: var(--text);
-    background: var(--primary-soft);
-  }
-  .food-bullet {
-    color: var(--primary);
-    font-size: 0.6rem;
-    flex-shrink: 0;
-    opacity: 0.7;
-  }
-  .food-text { flex: 1; }
+  .meal-body { padding: var(--space-3) var(--space-4); }
+  .food-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+  .food-item { display: flex; gap: var(--space-2); align-items: flex-start; }
+  .food-bullet { color: var(--primary); font-size: 0.5rem; line-height: 1.5; flex-shrink: 0; }
+  .food-text { font-size: var(--fs-sm); color: var(--text-muted); line-height: var(--lh-normal); }
   .food-raw {
-    font-family: var(--font-sans);
-    font-size: var(--fs-sm);
-    line-height: var(--lh-relaxed);
-    color: var(--text-muted);
-    white-space: pre-wrap;
+    white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono);
+    font-size: var(--fs-sm); color: var(--text-muted); line-height: var(--lh-normal);
     margin: 0;
   }
+  .meal-macros {
+    margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--border);
+    font-size: var(--fs-xs); color: var(--text-subtle); font-variant-numeric: tabular-nums;
+  }
 
-  /* ── Daily total summary bar (not a card) ── */
   .daily-total {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    margin-top: var(--space-6);
-    padding: var(--space-4) var(--space-5);
-    background:
-      linear-gradient(90deg, var(--primary-soft) 0%, var(--accent-soft) 100%),
-      var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-pill);
-    flex-wrap: wrap;
+    display: flex; align-items: center; gap: var(--space-2); justify-content: center;
+    padding: var(--space-4); margin-top: var(--space-4);
+    background: var(--surface); border-radius: var(--radius-md); border: 1px solid var(--border);
   }
-  .total-label {
-    font-size: var(--fs-sm);
-    font-weight: var(--fw-semibold);
-    color: var(--text);
-    letter-spacing: var(--ls-wide);
-    text-transform: uppercase;
-  }
-  .total-stats {
-    display: flex;
-    align-items: center;
-    gap: var(--space-6);
-    flex-wrap: wrap;
-  }
-  .total-stat {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-1);
-  }
-  .total-num {
-    font-size: var(--fs-xl);
-    font-weight: var(--fw-bold);
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-  }
-  .total-kcal .total-num { color: var(--primary); }
-  .total-protein .total-num { color: var(--accent); }
-  .total-unit {
-    font-size: var(--fs-xs);
-    color: var(--text-subtle);
-    text-transform: lowercase;
-  }
+  .total-label { font-size: var(--fs-sm); color: var(--text-subtle); font-weight: var(--fw-medium); }
+  .total-kcal { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--primary); font-variant-numeric: tabular-nums; }
+  .total-sep { color: var(--text-faint); }
+  .total-protein { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--accent); font-variant-numeric: tabular-nums; }
+  .total-carbs { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--leaf-400); font-variant-numeric: tabular-nums; }
+  .total-fat { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--amber-500); font-variant-numeric: tabular-nums; }
 
-  /* ── Unparseable plan: warm pre ── */
-  .plan-text {
-    font-family: var(--font-mono);
-    font-size: var(--fs-sm);
-    line-height: var(--lh-relaxed);
-    color: var(--text-muted);
-    white-space: pre-wrap;
-    padding: var(--space-6);
-    margin: 0;
-    background:
-      linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, transparent 100%),
-      var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-elevation-1);
+  /* Skeleton */
+  .skel-line {
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 200% 100%; border-radius: var(--radius-sm);
+    animation: shimmer 1.5s infinite;
   }
-
-  /* ── Error state: tomato-soft ── */
-  .meal-error {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    color: var(--danger);
-    font-size: var(--fs-sm);
-    margin-bottom: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    background: var(--danger-soft);
-    border: 1px solid var(--danger);
-    border-radius: var(--radius-md);
-  }
-  .error-icon { font-size: var(--fs-md); flex-shrink: 0; }
-
-  @media (prefers-reduced-motion: reduce) {
-    .meal-card, .regen-btn { transition: none; }
-    .meal-card:hover { transform: none; }
-    .regen-btn:not(:disabled):hover { transform: none; }
-  }
+  .skel-title { height: 20px; width: 120px; }
+  .skel-badge { height: 20px; width: 60px; }
+  .skel-w90 { height: 16px; width: 90%; margin-bottom: var(--space-2); }
+  .skel-w70 { height: 16px; width: 70%; margin-bottom: var(--space-2); }
+  .skel-w50 { height: 16px; width: 50%; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skel-line { animation: none; } }
 </style>

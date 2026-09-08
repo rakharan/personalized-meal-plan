@@ -32,7 +32,7 @@
   <div class="login-bg-deco"></div>
   <div class="login-card">
     <div class="login-icon">🍽️</div>
-    <h1>Saji</h1>
+    <h1><span class="saji-logo">saji</span></h1>
     <p class="login-sub">Masuk buat kelola rencana makanmu</p>
     <form onsubmit={submit}>
       <Input label="Email" type="email" placeholder="kamu@email.com" bind:value={email} autofocus />

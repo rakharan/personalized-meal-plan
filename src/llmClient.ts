@@ -52,7 +52,10 @@ function systemPrompt(locale: 'en' | 'id'): string {
 - Ingredients MUST be available in Indonesia (tempe, ikan kembung, kangkung, tahu, kecap manis)
 - If calorie target given: stay within ~5%, show per-meal calories
 - If protein target given: aim for it, show per-meal protein (g)
-- Format: meal name, items, calories (+ protein g)
+- EVERY meal MUST include all 4 macros in this exact format on the first line:
+  MEAL_NAME (~XXX kkal, XXg protein, XXg karbo, XXg lemak)
+  Example: SARAPAN (~740 kkal, 37g protein, 90g karbo, 25g lemak)
+- Format: meal name line with macros, then food items as bullet list, then blank line
 - If rotate cuisine: pick ONE, name at top (${id ? '"Hari ini: Jepang"' : '"Today: Japanese"'})
 - Plain text, short lines, no markdown tables, no disclaimers`;
 }
@@ -291,6 +294,11 @@ export async function regenerateMeal(
 }
 
 export function parseCuisine(planText: string): string | null {
-  const m = planText.match(/^(?:Today|Hari ini):\s*(.+)$/im);
-  return m ? m[1].trim() : null;
+  const m = planText.match(/^(?:Today|Hari ini):\s*(.+?)(?:\n|$)/im);
+  if (!m) return null;
+  // Strip anything from a meal name onward (SARAPAN, Breakfast, etc)
+  const mealStart = m[1].match(/\b(?:Sarapan|Breakfast|Makan\s+siang|Lunch|Makan\s+malam|Dinner|Snack|Camilan|Brunch)\b/i);
+  const cuisine = mealStart ? m[1].slice(0, mealStart.index).trim() : m[1].trim();
+  // Also strip trailing macros like "(~740 kkal..."
+  return cuisine.replace(/\s*\(.*$/i, '').trim() || null;
 }

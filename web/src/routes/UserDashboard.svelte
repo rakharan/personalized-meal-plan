@@ -25,7 +25,10 @@
       const res = await fetch('/api/plans/history', { headers: auth.authHeaders() });
       if (res.ok) {
         const data = await res.json();
-        lastPlan = data.plans?.[0] || null;
+        const p = data.plans?.[0];
+        if (p) {
+          lastPlan = { ...p, meals: p.meals || [] };
+        }
         recentPlans = data.plans?.slice(0, 3) || [];
       }
     } catch (e: any) {
@@ -49,7 +52,7 @@
         throw new Error(d.error || 'Gagal generate');
       }
       const data = await res.json();
-      lastPlan = { planText: data.plan, cuisine: data.cuisine, created: new Date().toISOString() };
+      lastPlan = { planText: data.plan, cuisine: data.cuisine, created: new Date().toISOString(), meals: data.meals || [] };
     } catch (e: any) {
       error = e.message;
     } finally {
@@ -366,7 +369,7 @@
             <span class="detail-date">{isToday(lastPlan.created) ? 'Baru saja' : fmtDate(lastPlan.created)}</span>
           </div>
           <div class="plan-body">
-            <MealPlanView bind:planText={lastPlan.planText} />
+            <MealPlanView bind:planText={lastPlan.planText} bind:meals={lastPlan.meals} />
           </div>
           <div class="plan-actions">
             <Button variant="secondary" loading={cookingLoading} onclick={getCookingSteps}>

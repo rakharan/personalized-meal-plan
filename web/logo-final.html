@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saji Logo — Final</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    background: #1A1612;
+    color: #E8E0D5;
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 48px 24px;
+  }
+
+  .header { text-align: center; margin-bottom: 40px; }
+  .header h1 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.03em; margin-bottom: 6px; }
+  .header p { font-size: 0.8rem; color: #6B6157; }
+
+  /* Main showcase — large hero versions */
+  .hero {
+    display: flex; flex-direction: column; gap: 48px;
+    max-width: 700px; width: 100%; margin-bottom: 60px;
+  }
+
+  .hero-card {
+    position: relative;
+    border-radius: 20px;
+    padding: 80px 48px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .hero-card.dark { background: #1A1612; }
+  .hero-card.surface { background: #241F1B; }
+  .hero-card.warm { background: #2D2823; }
+  .hero-card.light { background: #FDF8F3; }
+
+  .hero-label {
+    position: absolute; top: 16px; left: 20px;
+    font-size: 0.6rem; color: #6B6157; text-transform: uppercase;
+    letter-spacing: 0.1em; font-weight: 500;
+  }
+  .hero-card.light .hero-label { color: #847B72; }
+
+  /* THE LOGO */
+  .saji-logo {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: #52B788;
+    position: relative;
+    line-height: 1;
+    display: inline-block;
+  }
+  .saji-logo::after {
+    content: '';
+    position: absolute;
+    bottom: -0.25em;
+    left: 0;
+    right: 28%;
+    height: 0.13em;
+    background: #F59E0B;
+    border-radius: 0.07em;
+  }
+  .hero-card.light .saji-logo { color: #2D6A4F; }
+  .hero-card.light .saji-logo::after { background: #C75D3A; }
+
+  /* Size variants */
+  .size-xl { font-size: 5rem; }
+  .size-lg { font-size: 3.5rem; }
+  .size-md { font-size: 2.5rem; }
+  .size-sm { font-size: 1.5rem; }
+  .size-xs { font-size: 1rem; }
+
+  /* Weight variants */
+  .w-600 { font-weight: 600; }
+  .w-700 { font-weight: 700; }
+  .w-800 { font-weight: 800; }
+
+  /* Underline variants */
+  .u-thin::after { height: 0.08em; }
+  .u-thick::after { height: 0.2em; }
+  .u-full::after { right: 0; }
+  .u-short::after { right: 50%; }
+  .u-curve::after { border-radius: 0.5em 0.5em 0 0; height: 0.3em; bottom: -0.35em; }
+
+  /* Color variant — cream text */
+  .saji-logo.cream { color: #E8E0D5; }
+  .saji-logo.cream::after { background: #F59E0B; }
+
+  /* Usage context mockups */
+  .contexts { max-width: 700px; width: 100%; display: flex; flex-direction: column; gap: 24px; }
+  .context-card {
+    background: #241F1B; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 24px; display: flex; align-items: center; gap: 20px;
+  }
+  .context-label { font-size: 0.6rem; color: #6B6157; text-transform: uppercase; letter-spacing: 0.1em; width: 100px; flex-shrink: 0; }
+
+  /* Telegram mock */
+  .tg-mock {
+    background: #1A1612; border-radius: 12px; padding: 16px;
+    display: flex; gap: 8px; align-items: flex-start; flex: 1;
+  }
+  .tg-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: #52B788; color: #1A1612;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.7rem; letter-spacing: -0.04em;
+    flex-shrink: 0; position: relative;
+  }
+  .tg-avatar::after {
+    content: ''; position: absolute; bottom: -2px; left: 2px; right: 30%;
+    height: 3px; background: #F59E0B; border-radius: 2px;
+  }
+  .tg-bubble {
+    background: #241F1B; border-radius: 12px 12px 12px 2px;
+    padding: 10px 14px; font-size: 0.8rem; color: #E8E0D5; line-height: 1.5;
+  }
+
+  /* Nav bar mock */
+  .nav-mock {
+    background: #241F1B; border-radius: 8px; padding: 12px 20px;
+    display: flex; align-items: center; justify-content: space-between; flex: 1;
+  }
+  .nav-mock .nav-links { display: flex; gap: 16px; }
+  .nav-mock .nav-links span { font-size: 0.7rem; color: #6B6157; }
+  .nav-mock .nav-links span:first-child { color: #52B788; }
+
+  /* Footer mock */
+  .footer-mock {
+    background: #241F1B; border-radius: 8px; padding: 16px 20px;
+    display: flex; align-items: center; gap: 12px; flex: 1;
+  }
+  .footer-mock p { font-size: 0.7rem; color: #6B6157; }
+
+  /* Favicon mock */
+  .favicon-row { display: flex; gap: 16px; align-items: center; flex: 1; }
+  .favicon {
+    width: 48px; height: 48px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 1.2rem; letter-spacing: -0.04em;
+    position: relative;
+  }
+  .favicon.dark { background: #1A1612; color: #52B788; }
+  .favicon.light { background: #FDF8F3; color: #2D6A4F; }
+  .favicon.green { background: #52B788; color: #1A1612; }
+  .favicon::after {
+    content: ''; position: absolute; bottom: 8px; left: 12px; right: 30%;
+    height: 4px; background: #F59E0B; border-radius: 2px;
+  }
+  .favicon.dark::after { height: 3px; bottom: 6px; left: 10px; right: 25%; }
+  .favicon.green::after { background: #1A1612; height: 4px; bottom: 6px; left: 10px; right: 25%; }
+  .favicon.light::after { background: #C75D3A; height: 3px; bottom: 6px; left: 10px; right: 25%; }
+
+  .download-row {
+    display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+    margin-top: 32px;
+  }
+  .download-row a {
+    padding: 10px 20px; border-radius: 8px;
+    background: #241F1B; border: 1px solid rgba(255,255,255,0.06);
+    color: #E8E0D5; text-decoration: none; font-size: 0.8rem;
+    transition: border-color 0.15s;
+  }
+  .download-row a:hover { border-color: rgba(82,183,136,0.3); }
+
+  @media (max-width: 600px) {
+    .size-xl { font-size: 3.5rem; }
+    .size-lg { font-size: 2.5rem; }
+    .hero-card { padding: 48px 24px; }
+    .context-card { flex-direction: column; align-items: flex-start; }
+    .context-label { width: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Saji</h1>
+  <p>saji — "serve" in Indonesian. Leaf-green text, amber underline.</p>
+</div>
+
+<!-- Hero sizes -->
+<div class="hero">
+  <div class="hero-card dark">
+    <span class="hero-label">Hero / Dark</span>
+    <span class="saji-logo size-xl">saji</span>
+  </div>
+
+  <div class="hero-card light">
+    <span class="hero-label">Hero / Light</span>
+    <span class="saji-logo size-xl">saji</span>
+  </div>
+
+  <div class="hero-card warm">
+    <span class="hero-label">Hero / Warm</span>
+    <span class="saji-logo cream size-xl">saji</span>
+  </div>
+</div>
+
+<!-- Size scale -->
+<div class="hero" style="gap: 24px;">
+  <div class="hero-card surface" style="padding: 32px;">
+    <span class="hero-label">Size scale</span>
+    <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+      <span class="saji-logo size-xl">saji</span>
+      <span class="saji-logo size-lg">saji</span>
+      <span class="saji-logo size-md">saji</span>
+      <span class="saji-logo size-sm">saji</span>
+      <span class="saji-logo size-xs">saji</span>
+    </div>
+  </div>
+
+  <!-- Underline variants -->
+  <div class="hero-card surface" style="padding: 32px;">
+    <span class="hero-label">Underline variants</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 32px; justify-content: center; align-items: center;">
+      <span class="saji-logo size-md u-thin">saji</span>
+      <span class="saji-logo size-md">saji</span>
+      <span class="saji-logo size-md u-thick">saji</span>
+      <span class="saji-logo size-md u-full">saji</span>
+      <span class="saji-logo size-md u-short">saji</span>
+      <span class="saji-logo size-md u-curve">saji</span>
+    </div>
+  </div>
+
+  <!-- Weight variants -->
+  <div class="hero-card surface" style="padding: 32px;">
+    <span class="hero-label">Weight variants</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 32px; justify-content: center; align-items: center;">
+      <span class="saji-logo size-md w-600">saji</span>
+      <span class="saji-logo size-md w-700">saji</span>
+      <span class="saji-logo size-md w-800">saji</span>
+    </div>
+  </div>
+</div>
+
+<!-- Real-world usage -->
+<div class="contexts">
+  <!-- Nav bar -->
+  <div class="context-card">
+    <span class="context-label">Nav bar</span>
+    <div class="nav-mock">
+      <span class="saji-logo size-sm">saji</span>
+      <div class="nav-links">
+        <span>Beranda</span><span>Fitur</span><span>Sample</span><span>Masakan</span><span>Harga</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Telegram chat -->
+  <div class="context-card">
+    <span class="context-label">Telegram</span>
+    <div class="tg-mock">
+      <div class="tg-avatar">saji</div>
+      <div class="tg-bubble">
+        Halo! Aku Saji. Bakal bantu kamu makan enak + sehat setiap hari, pakai bahan yang gampang cari di Indonesia. Mau mulai?
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="context-card">
+    <span class="context-label">Footer</span>
+    <div class="footer-mock">
+      <span class="saji-logo size-sm cream">saji</span>
+      <p>Asisten makan harian — bikin kamu makan enak, sehat, dan sesuai goal.</p>
+    </div>
+  </div>
+
+  <!-- Favicon -->
+  <div class="context-card">
+    <span class="context-label">Favicon</span>
+    <div class="favicon-row">
+      <div class="favicon dark">s</div>
+      <div class="favicon light">s</div>
+      <div class="favicon green">s</div>
+      <span style="font-size: 0.7rem; color: #6B6157;">48×48px variants</span>
+    </div>
+  </div>
+</div>
+
+<div class="download-row">
+  <a href="data:text/html;charset=utf-8,<h1>SVG download placeholder</h1>">SVG</a>
+  <a href="data:text/html;charset=utf-8,<h1>PNG download placeholder</h1>">PNG</a>
+</div>
+
+</body>
+</html>

@@ -10,6 +10,7 @@ import {
   consumeTelegramLinkToken, savePlanHistory, getPlanHistory,
   saveWhatsAppOTP, verifyWhatsAppOTP,
   getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
+  getHealthScore, getAlerts, getTodaySnapshot, getRecentUsers, getPowerUsers, getAtRiskUsers, getFeedbackWall, getPlanQuality, getPushStatus,
 } from './store.js';
 import { hashPassword, verifyPassword, signToken, userAuth, DUMMY_HASH } from './auth.js';
 import {
@@ -17,6 +18,7 @@ import {
   validateCalories, validateProtein, validatePhone, sanitizeText, calcTDEE, suggestProtein,
 } from './validate.js';
 import { generateMealPlan, generateCookingSteps, regenerateMeal, parseCuisine } from './llmClient.js';
+import { parsePlanMeals } from './store.js';
 import { createDeliveryManager, deliverPlan } from './delivery.js';
 import type { Request, Response } from 'express';
 import { fileURLToPath } from 'node:url';
@@ -95,22 +97,115 @@ app.get('/api/users', authCheck, async (req: Request, res: Response) => {
   const page = Number(req.query.page ?? 1);
   const limit = 50;
   const offset = (page - 1) * limit;
+  const search = String(req.query.q ?? '').trim();
+
+  // Query: subscribers LEFT JOIN user_profiles (TG-linked users)
+  // UNION ALL user_profiles with no telegram_chat_id (web-only users)
+  // This ensures ALL users are visible in admin, whether they came via TG bot or web signup
+
+  const selectCols = `
+    s.chat_id, s.locale AS sub_locale, s.subscribed, s.streak, s.last_pushed,
+    s.push_hour, s.push_min, s.last_feedback, s.tier, s.created_at AS sub_created,
+    p.id AS profile_id, p.email, p.full_name, p.age, p.gender,
+    p.height_cm, p.weight_kg, p.activity_level, p.cooking_skill, p.household_size,
+    p.budget_tier, p.health_conditions, p.allergies, p.dietary_restrictions,
+    p.goal, p.target_calories, p.target_protein, p.cuisine_rotation,
+    p.meals_per_day, p.disliked_ingredients, p.delivery_channel, p.whatsapp_phone,
+    p.locale AS profile_locale, p.created_at AS profile_created
+  `;
+
+  const webOnlyCols = `
+    NULL::bigint AS chat_id, p.locale AS sub_locale, p.subscribed AS subscribed,
+    0 AS streak, NULL::text AS last_pushed, p.push_hour, p.push_min,
+    NULL::text AS last_feedback, 'free'::text AS tier, p.created_at AS sub_created,
+    p.id AS profile_id, p.email, p.full_name, p.age, p.gender,
+    p.height_cm, p.weight_kg, p.activity_level, p.cooking_skill, p.household_size,
+    p.budget_tier, p.health_conditions, p.allergies, p.dietary_restrictions,
+    p.goal, p.target_calories, p.target_protein, p.cuisine_rotation,
+    p.meals_per_day, p.disliked_ingredients, p.delivery_channel, p.whatsapp_phone,
+    p.locale AS profile_locale, p.created_at AS profile_created
+  `;
+
+  const joinClause = `LEFT JOIN user_profiles p ON p.telegram_chat_id = s.chat_id`;
+  const orderClause = `ORDER BY sub_created DESC`;
+
+  let query, params: any[], countQuery, countParams: any[];
+  if (search) {
+    query = `
+      SELECT ${selectCols} FROM subscribers s ${joinClause}
+      WHERE s.chat_id::text ILIKE $1 OR s.tier ILIKE $1 OR p.email ILIKE $1 OR p.full_name ILIKE $1 OR p.goal ILIKE $1
+      UNION ALL
+      SELECT ${webOnlyCols} FROM user_profiles p
+      WHERE p.telegram_chat_id IS NULL
+        AND (p.email ILIKE $1 OR p.full_name ILIKE $1 OR p.goal ILIKE $1)
+      ${orderClause} LIMIT $2 OFFSET $3`;
+    params = [`%${search}%`, limit, offset];
+    countQuery = `
+      SELECT COUNT(*)::int FROM (
+        SELECT 1 FROM subscribers s LEFT JOIN user_profiles p ON p.telegram_chat_id = s.chat_id
+        WHERE s.chat_id::text ILIKE $1 OR s.tier ILIKE $1 OR p.email ILIKE $1 OR p.full_name ILIKE $1 OR p.goal ILIKE $1
+        UNION ALL
+        SELECT 1 FROM user_profiles p
+        WHERE p.telegram_chat_id IS NULL AND (p.email ILIKE $1 OR p.full_name ILIKE $1 OR p.goal ILIKE $1)
+      ) AS combined`;
+    countParams = [`%${search}%`];
+  } else {
+    query = `
+      SELECT ${selectCols} FROM subscribers s ${joinClause}
+      UNION ALL
+      SELECT ${webOnlyCols} FROM user_profiles p WHERE p.telegram_chat_id IS NULL
+      ${orderClause} LIMIT $1 OFFSET $2`;
+    params = [limit, offset];
+    countQuery = `
+      SELECT COUNT(*)::int FROM (
+        SELECT 1 FROM subscribers
+        UNION ALL
+        SELECT 1 FROM user_profiles WHERE telegram_chat_id IS NULL
+      ) AS combined`;
+    countParams = [];
+  }
+
   const [result, countResult] = await Promise.all([
-    pool.query('SELECT chat_id, locale, subscribed, streak, last_pushed, push_hour, push_min, last_feedback, tier, created_at FROM subscribers ORDER BY chat_id DESC LIMIT $1 OFFSET $2', [limit, offset]),
-    pool.query('SELECT COUNT(*)::int FROM subscribers'),
+    pool.query(query, params),
+    pool.query(countQuery, countParams),
   ]);
   res.json({
     rows: result.rows.map((r: any) => ({
       chatId: r.chat_id,
-      locale: r.locale,
-      subscribed: !!r.subscribed,
+      tier: r.tier,
       streak: r.streak,
+      subscribed: !!r.subscribed,
       lastPushed: r.last_pushed,
       pushHour: r.push_hour,
       pushMin: r.push_min,
       lastFeedback: r.last_feedback,
-      tier: r.tier,
-      createdAt: r.created_at,
+      locale: r.sub_locale,
+      createdAt: r.sub_created,
+      // Profile data
+      fullName: r.full_name || null,
+      email: r.email || null,
+      profileId: r.profile_id || null,
+      age: r.age || null,
+      gender: r.gender || null,
+      heightCm: r.height_cm || null,
+      weightKg: r.weight_kg || null,
+      activityLevel: r.activity_level || null,
+      cookingSkill: r.cooking_skill || null,
+      householdSize: r.household_size || null,
+      budgetTier: r.budget_tier || null,
+      healthConditions: r.health_conditions || null,
+      allergies: r.allergies || null,
+      dietaryRestrictions: r.dietary_restrictions || null,
+      goal: r.goal || null,
+      targetCalories: r.target_calories || null,
+      targetProtein: r.target_protein || null,
+      cuisineRotation: r.cuisine_rotation || null,
+      mealsPerDay: r.meals_per_day || null,
+      dislikedIngredients: r.disliked_ingredients || null,
+      deliveryChannel: r.delivery_channel || null,
+      whatsappPhone: r.whatsapp_phone || null,
+      profileLocale: r.profile_locale || null,
+      profileCreated: r.profile_created || null,
     })),
     total: countResult.rows[0].count,
     page,
@@ -390,7 +485,8 @@ app.post('/api/plans/generate', userAuth, async (req: Request, res: Response) =>
 
     const cuisine = parseCuisine(plan);
     await savePlanHistory(userId, plan, cuisine, user.target_calories, user.target_protein);
-    res.json({ plan, cuisine });
+    const meals = parsePlanMeals(plan);
+    res.json({ plan, cuisine, meals });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -436,8 +532,37 @@ app.post('/api/plans/regenerate-meal', userAuth, async (req: Request, res: Respo
       protein: user.target_protein ? String(user.target_protein) : '',
     };
 
-    const newMeal = await regenerateMeal(planText, mealName, user.locale as 'en' | 'id', answers);
-    res.json({ meal: newMeal });
+    const newMealText = await regenerateMeal(planText, mealName, user.locale as 'en' | 'id', answers, undefined);
+
+    // Replace meal chunk server-side using parsePlanMeals positions
+    const cleanText = planText.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1');
+    const mealNames = 'Sarapan|Breakfast|Makan\\s+siang|Lunch|Makan\\s+malam|Dinner|Snack|Camilan|Brunch';
+    const mealRegex = new RegExp(`((?:${mealNames}))`, 'gi');
+    const splits: { name: string; start: number; end: number }[] = [];
+    let match;
+    while ((match = mealRegex.exec(cleanText)) !== null) {
+      splits.push({ name: match[1].trim(), start: match.index, end: 0 });
+    }
+    for (let i = 0; i < splits.length; i++) {
+      splits[i].end = i + 1 < splits.length ? splits[i + 1].start : cleanText.length;
+    }
+
+    const target = splits.find(s => s.name.toLowerCase().includes(mealName.toLowerCase()));
+    let updatedPlan: string;
+    if (target) {
+      const before = cleanText.slice(0, target.start);
+      const after = cleanText.slice(target.end);
+      updatedPlan = before + newMealText.trim() + '\n' + after;
+    } else {
+      updatedPlan = cleanText + '\n' + newMealText.trim();
+    }
+
+    // Parse updated plan into structured meals + save to DB
+    const meals = parsePlanMeals(updatedPlan);
+    const cuisine = parseCuisine(updatedPlan);
+    await savePlanHistory(userId, updatedPlan, cuisine, user.target_calories, user.target_protein);
+
+    res.json({ meal: newMealText, planText: updatedPlan, meals });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -546,6 +671,38 @@ app.get('/api/metrics', authCheck, async (_req: Request, res: Response) => {
       activityByHour: activityByHourData,
       cuisinePopularity: cuisinePop,
       churn,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Admin: actionable dashboard data (new sections)
+// ────────────────────────────────────────────────────────────────────────────
+app.get('/api/dashboard', authCheck, async (_req: Request, res: Response) => {
+  try {
+    const [health, alerts, today, recentUsers, powerUsers, atRiskUsers, feedbackWall, planQuality, pushStatus] = await Promise.all([
+      getHealthScore(),
+      getAlerts(),
+      getTodaySnapshot(),
+      getRecentUsers(10),
+      getPowerUsers(5),
+      getAtRiskUsers(10),
+      getFeedbackWall(10),
+      getPlanQuality(),
+      getPushStatus(),
+    ]);
+    res.json({
+      health,
+      alerts,
+      today,
+      recentUsers,
+      powerUsers,
+      atRiskUsers,
+      feedbackWall,
+      planQuality,
+      pushStatus,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

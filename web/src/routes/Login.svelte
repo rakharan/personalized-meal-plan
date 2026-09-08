@@ -38,7 +38,7 @@
 <div class="login-wrap">
   <div class="login-card">
     <div class="login-icon">🍽️</div>
-    <h1>Saji <span>Admin</span></h1>
+    <h1><span class="saji-logo">saji</span> <span style="color:var(--text-subtle);font-size:0.6em;font-weight:var(--fw-medium)">admin</span></h1>
     <p class="login-sub">Masukkan token admin buat lanjut</p>
     <form onsubmit={submit}>
       <Input type="password" placeholder="Token admin" bind:value={token} autofocus />

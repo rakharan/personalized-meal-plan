@@ -197,6 +197,7 @@ export async function migrateSchema(): Promise<void> {
         id              SERIAL PRIMARY KEY,
         user_id         INTEGER NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
         plan_text      TEXT NOT NULL,
+        meals_json     JSONB,
         cuisine        TEXT,
         calories_total INTEGER,
         protein_total  INTEGER,
@@ -204,6 +205,15 @@ export async function migrateSchema(): Promise<void> {
       );
     `);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_meal_plan_history_user ON meal_plan_history(user_id);');
+
+    // Add meals_json column if missing (existing DBs)
+    const historyCols = new Set(
+      (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'meal_plan_history'")).rows
+        .map((r: any) => r.column_name)
+    );
+    if (!historyCols.has('meals_json')) {
+      await pool.query('ALTER TABLE meal_plan_history ADD COLUMN meals_json JSONB');
+    }
 
     // ── Telegram link tokens (temporary, for connecting bot to web account) ──
     await pool.query(`
@@ -243,6 +253,51 @@ export async function migrateSchema(): Promise<void> {
       await pool.query(`ALTER TABLE user_profiles ADD COLUMN ${col} ${def};`);
     }
   }
+
+  // ── Plan feedback (per-plan ratings from users) ──
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS plan_feedback (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+      plan_id     INTEGER REFERENCES meal_plan_history(id) ON DELETE CASCADE,
+      chat_id     BIGINT,
+      rating      INTEGER NOT NULL,
+      feedback    TEXT,
+      cuisine     TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_plan_feedback_user ON plan_feedback(user_id);');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_plan_feedback_created ON plan_feedback(created_at);');
+
+  // ── Bot plan history — generated plans per TG chat ──
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bot_plan_history (
+      id          SERIAL PRIMARY KEY,
+      chat_id     BIGINT NOT NULL,
+      plan_text   TEXT NOT NULL,
+      cuisine     TEXT,
+      meals_json  JSONB,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_bot_plan_history_chat ON bot_plan_history(chat_id);');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_bot_plan_history_date ON bot_plan_history(created_at);');
+
+  // ── Push delivery log ──
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS push_log (
+      id          SERIAL PRIMARY KEY,
+      chat_id     BIGINT NOT NULL,
+      user_id     INTEGER REFERENCES user_profiles(id) ON DELETE CASCADE,
+      status      TEXT NOT NULL DEFAULT 'pending',
+      error       TEXT,
+      cuisine     TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_push_log_created ON push_log(created_at);');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_push_log_status ON push_log(status);');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -400,6 +455,64 @@ export async function getPlan(planId: number): Promise<Plan | null> {
 export async function deletePlan(chatId: number, planId: number): Promise<number> {
   const { rowCount } = await pool.query('DELETE FROM plans WHERE id = $1 AND chat_id = $2', [planId, chatId]);
   return rowCount ?? 0;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Bot plan history — stores generated plan text per chat_id
+// ────────────────────────────────────────────────────────────────────────────
+export async function saveBotPlan(chatId: number, planText: string, cuisine: string | null, mealsJson: string): Promise<number> {
+  const { rows } = await pool.query(
+    'INSERT INTO bot_plan_history (chat_id, plan_text, cuisine, meals_json) VALUES ($1, $2, $3, $4) RETURNING id',
+    [chatId, planText, cuisine, mealsJson]
+  );
+  return rows[0].id;
+}
+
+export async function getBotPlanHistory(chatId: number, limit = 10): Promise<any[]> {
+  const { rows } = await pool.query(
+    'SELECT id, plan_text, cuisine, meals_json, created_at FROM bot_plan_history WHERE chat_id = $1 ORDER BY created_at DESC LIMIT $2',
+    [chatId, limit]
+  );
+  return rows.map((r: any) => ({
+    id: r.id,
+    planText: r.plan_text,
+    cuisine: r.cuisine,
+    meals: Array.isArray(r.meals_json) ? r.meals_json : (r.meals_json ? JSON.parse(r.meals_json) : null),
+    created: r.created_at.toISOString(),
+  }));
+}
+
+export async function getBotPlanByDate(chatId: number, dateStr: string): Promise<any | null> {
+  const { rows } = await pool.query(
+    "SELECT id, plan_text, cuisine, meals_json, created_at FROM bot_plan_history WHERE chat_id = $1 AND DATE(created_at) = $2 ORDER BY created_at DESC LIMIT 1",
+    [chatId, dateStr]
+  );
+  if (!rows.length) return null;
+  const r = rows[0];
+  return {
+    id: r.id,
+    planText: r.plan_text,
+    cuisine: r.cuisine,
+    meals: Array.isArray(r.meals_json) ? r.meals_json : (r.meals_json ? JSON.parse(r.meals_json) : null),
+    created: r.created_at.toISOString(),
+  };
+}
+
+export async function updateBotPlanMeals(planId: number, planText: string, mealsJson: string): Promise<void> {
+  await pool.query(
+    'UPDATE bot_plan_history SET plan_text = $1, meals_json = $2 WHERE id = $3',
+    [planText, mealsJson, planId]
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Push log — track delivery status
+// ────────────────────────────────────────────────────────────────────────────
+export async function logPush(chatId: number, status: string, cuisine: string | null, error: string | null = null): Promise<void> {
+  await pool.query(
+    'INSERT INTO push_log (chat_id, status, cuisine, error) VALUES ($1, $2, $3, $4)',
+    [chatId, status, cuisine, error]
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -715,22 +828,92 @@ export async function consumeTelegramLinkToken(token: string): Promise<number | 
 }
 
 // ── Meal plan history ──
+
+export interface ParsedMeal {
+  name: string;
+  body: string;
+  macros?: string;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  items: string[];
+}
+
+// Server-side meal parser — shared between generate, regenerate, and history
+export function parsePlanMeals(text: string): ParsedMeal[] {
+  if (!text) return [];
+  const clean = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1');
+  const mealNames = 'Sarapan|Breakfast|Makan\\s+siang|Lunch|Makan\\s+malam|Dinner|Snack|Camilan|Brunch';
+  const mealRegex = new RegExp(`((?:${mealNames}))`, 'gi');
+  const splits: { name: string; start: number }[] = [];
+  let match;
+  while ((match = mealRegex.exec(clean)) !== null) {
+    splits.push({ name: match[1].trim(), start: match.index });
+  }
+  if (splits.length === 0) return [];
+  const result: ParsedMeal[] = [];
+  for (let i = 0; i < splits.length; i++) {
+    const start = splits[i].start;
+    const end = i + 1 < splits.length ? splits[i + 1].start : clean.length;
+    const chunk = clean.slice(start, end).trim();
+    const macroMatch = chunk.match(/(~?\d+\s*(?:kal|kcal|kkal|cal).*?protein.*?\d+\s*g)/i);
+    const macros = macroMatch ? macroMatch[1] : '';
+    const body = chunk.replace(mealRegex, '').trim();
+    // Extract kcal — matches "740 kkal", "~740 kal", "740kcal"
+    const kcalMatch = (macros || chunk).match(/~?(\d+)\s*(?:kal|kcal|kkal|cal)/i);
+    // Extract protein — matches "Protein: ~37g" OR "37g protein" OR "protein 37g"
+    const proteinMatch = (macros || chunk).match(/protein\W*~?(\d+)\s*g/i) || (macros || chunk).match(/(\d+)\s*g\W*protein/i);
+    // Extract carbs — matches "90g karbo" OR "karbo: 90g" OR "90g carbs" OR "carbs 90g"
+    const carbsMatch = (macros || chunk).match(/(?:karbo|carb[s]?)\W*~?(\d+)\s*g/i) || (macros || chunk).match(/(\d+)\s*g\W*(?:karbo|carb[s]?)/i);
+    // Extract fat — matches "25g lemak" OR "lemak: 25g" OR "25g fat" OR "fat 25g"
+    const fatMatch = (macros || chunk).match(/(?:lemak|fat)\W*~?(\d+)\s*g/i) || (macros || chunk).match(/(\d+)\s*g\W*(?:lemak|fat)/i);
+    // Extract food items — lines that aren't macros/labels
+    const macroLineRegex = /^~?\d+\s*(kal|kcal|kkal|cal)/i;
+    const proteinLineRegex = /^protein/i;
+    const kaloriLineRegex = /^kalori\s*:/i;
+    const items = (body || chunk)
+      .split('\n')
+      .map(l => l.replace(/^[•\-*\u2022]\s*/, '').trim())
+      .filter(l => l.length > 0
+        && !macroLineRegex.test(l)
+        && !proteinLineRegex.test(l)
+        && !kaloriLineRegex.test(l)
+        && !/^\(.*kal.*protein/i.test(l)  // skip "(~740 kkal, 37g protein)"
+        && !/^\d+\s*g\s*protein/i.test(l) // skip "37g protein"
+      );
+    result.push({
+      name: splits[i].name,
+      body: body || chunk,
+      macros,
+      kcal: kcalMatch ? parseInt(kcalMatch[1], 10) : 0,
+      protein: proteinMatch ? parseInt(proteinMatch[1], 10) : 0,
+      carbs: carbsMatch ? parseInt(carbsMatch[1], 10) : 0,
+      fat: fatMatch ? parseInt(fatMatch[1], 10) : 0,
+      items,
+    });
+  }
+  return result;
+}
+
 export async function savePlanHistory(userId: number, planText: string, cuisine: string | null, calories: number | null, protein: number | null): Promise<number> {
+  const meals = parsePlanMeals(planText);
   const { rows } = await pool.query(
-    'INSERT INTO meal_plan_history (user_id, plan_text, cuisine, calories_total, protein_total) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-    [userId, planText, cuisine, calories, protein]
+    'INSERT INTO meal_plan_history (user_id, plan_text, meals_json, cuisine, calories_total, protein_total) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+    [userId, planText, JSON.stringify(meals), cuisine, calories, protein]
   );
   return rows[0].id;
 }
 
 export async function getPlanHistory(userId: number, limit = 30): Promise<any[]> {
   const { rows } = await pool.query(
-    'SELECT id, plan_text, cuisine, calories_total, protein_total, created_at FROM meal_plan_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+    'SELECT id, plan_text, meals_json, cuisine, calories_total, protein_total, created_at FROM meal_plan_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
     [userId, limit]
   );
   return rows.map((r: any) => ({
     id: r.id,
     planText: r.plan_text,
+    meals: Array.isArray(r.meals_json) ? r.meals_json : (r.meals_json ? JSON.parse(r.meals_json) : null),
     cuisine: r.cuisine,
     calories: r.calories_total,
     protein: r.protein_total,
@@ -974,4 +1157,244 @@ export async function getChurnRate(): Promise<{ totalActive: number; churned: nu
   const totalActive = rows[0].total_active || 0;
   const churned = rows[0].churned || 0;
   return { totalActive, churned, rate: totalActive > 0 ? Math.round((churned / totalActive) * 100) : 0 };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// New actionable metrics
+// ════════════════════════════════════════════════════════════════════════════
+
+// Health score — 0-100 combining DAU trend, churn, conversion, retention
+export async function getHealthScore(): Promise<{ score: number; components: Record<string, number>[]; label: string }> {
+  const [dauData, churnData, convData, retentionData] = await Promise.all([
+    getDAU(7),
+    getChurnRate(),
+    getConversion(),
+    getRetention(),
+  ]);
+
+  // DAU trend: compare last 3 days avg vs first 3 days avg
+  const recent3 = dauData.slice(-3).reduce((s, d) => s + d.dau, 0) / 3;
+  const first3 = dauData.slice(0, 3).reduce((s, d) => s + d.dau, 0) / 3;
+  const dauTrendPct = first3 > 0 ? Math.round(((recent3 - first3) / first3) * 100) : 0;
+  const dauScore = Math.max(0, Math.min(100, 50 + dauTrendPct * 2));
+
+  // Churn: lower is better. 0% = 100, 50%+ = 0
+  const churnScore = Math.max(0, 100 - churnData.rate * 2);
+
+  // Conversion: higher is better. 0% = 0, 50%+ = 100
+  const convScore = Math.min(100, convData.rate * 2);
+
+  // Retention: average D1 across cohorts
+  const avgD1 = retentionData.length > 0
+    ? retentionData.reduce((s, r) => s + r.d1, 0) / retentionData.length
+    : 0;
+  const retScore = Math.min(100, avgD1);
+
+  const score = Math.round(dauScore * 0.3 + churnScore * 0.3 + convScore * 0.2 + retScore * 0.2);
+  const label = score >= 75 ? 'healthy' : score >= 50 ? 'fair' : score >= 30 ? 'warning' : 'critical';
+
+  return {
+    score,
+    components: [
+      { dauTrend: dauTrendPct },
+      { churn: churnData.rate },
+      { conversion: convData.rate },
+      { retention: Math.round(avgD1) },
+    ],
+    label,
+  };
+}
+
+// Smart alerts — threshold-based notifications
+export async function getAlerts(): Promise<{ severity: string; message: string }[]> {
+  const [dauData, churnData, convData, retentionData, tokenEcon] = await Promise.all([
+    getDAU(7),
+    getChurnRate(),
+    getConversion(),
+    getRetention(),
+    getTokenEconomics(7),
+  ]);
+
+  const alerts: { severity: string; message: string }[] = [];
+
+  // No new users in 3 days
+  const recentNew = dauData.slice(-3).reduce((s, d) => s + d.new_users, 0);
+  if (recentNew === 0) {
+    alerts.push({ severity: 'warning', message: 'Tidak ada user baru dalam 3 hari terakhir' });
+  }
+
+  // Churn > 20%
+  if (churnData.rate > 20) {
+    alerts.push({ severity: 'danger', message: `Churn ${churnData.rate}% — di atas threshold 20%` });
+  }
+
+  // D1 retention < 30%
+  if (retentionData.length > 0) {
+    const avgD1 = retentionData.reduce((s, r) => s + r.d1, 0) / retentionData.length;
+    if (avgD1 < 30) {
+      alerts.push({ severity: 'warning', message: `D1 retention ${Math.round(avgD1)}% — di bawah 30%` });
+    }
+  }
+
+  // Token cost spike — compare last 7d per user vs total per user
+  if (tokenEcon.perUser > 50000) {
+    alerts.push({ severity: 'info', message: `Token/user ${tokenEcon.perUser.toLocaleString()} minggu ini — cek penggunaan` });
+  }
+
+  // Conversion = 0 but have users
+  if (convData.total > 0 && convData.premium === 0) {
+    alerts.push({ severity: 'info', message: `${convData.total} user, 0 premium — belum ada konversi` });
+  }
+
+  // DAU declining
+  const recent3 = dauData.slice(-3).reduce((s, d) => s + d.dau, 0) / 3;
+  const first3 = dauData.slice(0, 3).reduce((s, d) => s + d.dau, 0) / 3;
+  if (first3 > 0 && recent3 < first3 * 0.7) {
+    alerts.push({ severity: 'danger', message: `DAU turun ${Math.round((1 - recent3 / first3) * 100)}% minggu ini` });
+  }
+
+  // No alerts = all good
+  if (alerts.length === 0) {
+    alerts.push({ severity: 'ok', message: 'Semua metrik dalam batas normal' });
+  }
+
+  return alerts;
+}
+
+// Today snapshot — real-time numbers for today
+export async function getTodaySnapshot(): Promise<{ plansToday: number; activeToday: number; pushesSent: number; pushesFailed: number; newUsersToday: number }> {
+  const { rows } = await pool.query(`
+    SELECT
+      (SELECT COUNT(*)::int FROM usage_log WHERE feature = 'mealplan' AND created >= CURRENT_DATE) AS plans_today,
+      (SELECT COUNT(DISTINCT chat_id)::int FROM usage_log WHERE created >= CURRENT_DATE) AS active_today,
+      (SELECT COUNT(*)::int FROM push_log WHERE status = 'sent' AND created_at >= CURRENT_DATE) AS pushes_sent,
+      (SELECT COUNT(*)::int FROM push_log WHERE status = 'failed' AND created_at >= CURRENT_DATE) AS pushes_failed,
+      (SELECT COUNT(*)::int FROM subscribers WHERE created_at >= CURRENT_DATE) AS new_users_today
+  `);
+  return rows[0];
+}
+
+// Recent users — last N signups
+export async function getRecentUsers(limit = 10): Promise<{ chat_id: string; tier: string; streak: number; created_at: string; last_active: string | null }[]> {
+  const { rows } = await pool.query(`
+    SELECT
+      s.chat_id::text,
+      s.tier,
+      s.streak,
+      s.created_at,
+      MAX(u.created)::text AS last_active
+    FROM subscribers s
+    LEFT JOIN usage_log u ON u.chat_id = s.chat_id
+    GROUP BY s.chat_id, s.tier, s.streak, s.created_at
+    ORDER BY s.created_at DESC
+    LIMIT $1
+  `, [limit]);
+  return rows;
+}
+
+// Power users — most active by plan count
+export async function getPowerUsers(limit = 5): Promise<{ chat_id: string; tier: string; streak: number; plan_count: number; last_active: string }[]> {
+  const { rows } = await pool.query(`
+    SELECT
+      s.chat_id::text,
+      s.tier,
+      s.streak,
+      COUNT(u.id)::int AS plan_count,
+      MAX(u.created)::text AS last_active
+    FROM subscribers s
+    JOIN usage_log u ON u.chat_id = s.chat_id
+    WHERE u.feature = 'mealplan' AND u.created >= NOW() - INTERVAL '30 days'
+    GROUP BY s.chat_id, s.tier, s.streak
+    ORDER BY plan_count DESC
+    LIMIT $1
+  `, [limit]);
+  return rows;
+}
+
+// At-risk users — active 5-7 days ago, not since
+export async function getAtRiskUsers(limit = 10): Promise<{ chat_id: string; tier: string; streak: number; last_active: string; days_inactive: number }[]> {
+  const { rows } = await pool.query(`
+    WITH last_active AS (
+      SELECT chat_id, MAX(created) AS last_seen
+      FROM usage_log
+      GROUP BY chat_id
+    )
+    SELECT
+      s.chat_id::text,
+      s.tier,
+      s.streak,
+      la.last_seen::text AS last_active,
+      EXTRACT(DAY FROM NOW() - la.last_seen)::int AS days_inactive
+    FROM subscribers s
+    JOIN last_active la ON la.chat_id = s.chat_id
+    WHERE la.last_seen >= NOW() - INTERVAL '7 days'
+      AND la.last_seen < NOW() - INTERVAL '4 days'
+    ORDER BY la.last_seen ASC
+    LIMIT $1
+  `, [limit]);
+  return rows;
+}
+
+// Feedback wall — latest user feedback
+export async function getFeedbackWall(limit = 10): Promise<{ id: number; rating: number; feedback: string | null; cuisine: string | null; chat_id: string | null; created_at: string }[]> {
+  const { rows } = await pool.query(`
+    SELECT id, rating, feedback, cuisine, chat_id::text, created_at::text
+    FROM plan_feedback
+    ORDER BY created_at DESC
+    LIMIT $1
+  `, [limit]);
+  return rows;
+}
+
+// Plan quality — avg rating, best/worst cuisines
+export async function getPlanQuality(): Promise<{ avgRating: number; totalFeedback: number; bestCuisines: { cuisine: string; avgRating: number; count: number }[]; worstCuisines: { cuisine: string; avgRating: number; count: number }[] }> {
+  const { rows: ratingRows } = await pool.query(`
+    SELECT COALESCE(AVG(rating), 0)::float AS avg_rating, COUNT(*)::int AS total
+    FROM plan_feedback
+    WHERE created_at >= NOW() - INTERVAL '30 days'
+  `);
+
+  const { rows: cuisineRows } = await pool.query(`
+    SELECT cuisine, AVG(rating)::float AS avg_rating, COUNT(*)::int AS count
+    FROM plan_feedback
+    WHERE cuisine IS NOT NULL AND created_at >= NOW() - INTERVAL '30 days'
+    GROUP BY cuisine
+    HAVING COUNT(*) >= 1
+    ORDER BY avg_rating DESC
+  `);
+
+  return {
+    avgRating: Math.round((ratingRows[0].avg_rating || 0) * 10) / 10,
+    totalFeedback: ratingRows[0].total || 0,
+    bestCuisines: cuisineRows.slice(0, 3).map((r: any) => ({ cuisine: r.cuisine, avgRating: Math.round(r.avg_rating * 10) / 10, count: r.count })),
+    worstCuisines: [...cuisineRows].sort((a: any, b: any) => a.avg_rating - b.avg_rating).slice(0, 3).map((r: any) => ({ cuisine: r.cuisine, avgRating: Math.round(r.avg_rating * 10) / 10, count: r.count })),
+  };
+}
+
+// Push delivery status — today's push log
+export async function getPushStatus(): Promise<{ total: number; sent: number; failed: number; pending: number; recent: { id: number; chat_id: string; status: string; error: string | null; cuisine: string | null; created_at: string }[] }> {
+  const { rows: summaryRows } = await pool.query(`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE status = 'sent')::int AS sent,
+      COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+      COUNT(*) FILTER (WHERE status = 'pending')::int AS pending
+    FROM push_log
+    WHERE created_at >= CURRENT_DATE
+  `);
+
+  const { rows: recentRows } = await pool.query(`
+    SELECT id, chat_id::text, status, error, cuisine, created_at::text
+    FROM push_log
+    ORDER BY created_at DESC
+    LIMIT 10
+  `);
+
+  return {
+    total: summaryRows[0].total || 0,
+    sent: summaryRows[0].sent || 0,
+    failed: summaryRows[0].failed || 0,
+    pending: summaryRows[0].pending || 0,
+    recent: recentRows,
+  };
 }

@@ -34,7 +34,7 @@
 </button>
 
 <nav class="sidebar" class:open={mobileNavOpen}>
-  <div class="sidebar-brand">{brand.slice(0,2)}<span>{brand.slice(2)}</span></div>
+  <div class="sidebar-brand"><span class="saji-logo">saji</span></div>
   <div class="nav-list">
     {#each items as item}
       <a
@@ -92,9 +92,9 @@
     color: var(--text);
     display: flex;
     align-items: center;
-    gap: var(--space-1);
+    gap: 0;
   }
-  .sidebar-brand span { color: var(--primary); }
+  .sidebar-brand .saji-logo { font-size: var(--fs-lg); }
   .nav-list { flex: 1; }
   .nav-list a, :global(.nav-bottom a), :global(.theme-toggle) {
     display: flex;
