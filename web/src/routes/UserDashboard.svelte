@@ -305,7 +305,7 @@
       <section class="today-plan" class:cooked={cookingDone}>
         <div class="today-plan-header">
           <div class="today-title">
-            <h2>Hari ini</h2>
+            <h2>{isToday(lastPlan.created) ? 'Hari ini' : 'Terakhir'}</h2>
             <span class="today-date">{isToday(lastPlan.created) ? 'Baru saja' : fmtDate(lastPlan.created)}</span>
           </div>
           {#if cookingDone}
@@ -314,6 +314,14 @@
             <span class="cuisine-tag">{cuisineEmoji(lastPlan.cuisine)} {lastPlan.cuisine || 'Rencana harian'}</span>
           {/if}
         </div>
+        {#if !isToday(lastPlan.created)}
+          <div class="stale-notice">
+            <span>Ini plan kemarin.</span>
+            <button class="stale-regen" onclick={generatePlan} disabled={generating}>
+              {generating ? 'Lagi nyiapin...' : 'Bikin plan hari ini →'}
+            </button>
+          </div>
+        {/if}
 
         <div class="plan-body">
           {#if generating}
@@ -333,7 +341,7 @@
 
         <div class="today-plan-footer">
           <span class="total-macros">
-            {totals.kcal || extractCalories(lastPlan.planText)} kal · {totals.protein}g protein
+            Target: {profile.target_calories || '—'} kal · {profile.target_protein || '—'}g protein
           </span>
           <div class="footer-actions">
             {#if !cookingDone}
@@ -522,6 +530,19 @@
   .today-title { display: flex; align-items: baseline; gap: var(--space-3); }
   .today-title h2 { font-size: var(--fs-xl); font-weight: var(--fw-bold); letter-spacing: var(--ls-snug); }
   .today-date { font-size: var(--fs-xs); color: var(--text-faint); }
+  .stale-notice {
+    display: flex; align-items: center; justify-content: center; gap: var(--space-3);
+    margin: var(--space-3) var(--space-5) 0; padding: var(--space-2) var(--space-3);
+    background: var(--accent-soft); border-radius: var(--radius-md);
+    font-size: var(--fs-sm); color: var(--accent);
+  }
+  .stale-regen {
+    background: none; border: none; cursor: pointer;
+    color: var(--accent); font-weight: var(--fw-semibold); font-size: var(--fs-sm);
+    font-family: inherit; text-decoration: underline;
+  }
+  .stale-regen:hover { color: var(--amber-400); }
+  .stale-regen:disabled { opacity: .5; cursor: wait; }
   .cuisine-tag {
     background: linear-gradient(135deg, var(--primary-soft), var(--accent-soft));
     color: var(--primary); padding: var(--space-1) var(--space-3);

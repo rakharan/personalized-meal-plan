@@ -937,6 +937,8 @@ export function parsePlanMeals(text: string): ParsedMeal[] {
         && !/^\d+\s*g\s*protein/i.test(l) // skip "37g protein"
         && !/^[A-ZÀ-Ý\s]+\s*\(.*kal/i.test(l) // skip leftover header tail "SIANG (~730 kkal, ...)"
         && !/^~?\d+\s*(kal|kcal|kkal|cal).*\)$/i.test(l) // skip stray macro line ending in ")"
+        && !/^catatan\s*:/i.test(l)       // skip notes header "Catatan:"
+        && !/^(semua bahan|hindari|alergi|masak simple|note|tips)\b/i.test(l) // skip note lines
       );
     result.push({
       name: splits[i].name,
