@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // Saji API client — JWT auth, mirrors web auth.svelte.ts
 class Api {
-  // ponytail: hardcoded LAN/default; add --dart-define=API_URL for device testing
-  static const baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://10.0.2.2:3000');
+  // ponytail: LAN IP of dev machine; add --dart-define=API_URL for other hosts
+  static const baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://192.168.0.151:3000');
   static const _tokenKey = 'saji-user-token';
 
   String? _token;
