@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="id" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Masuk - Saji</title>
+    <meta name="view-transition" content="same-origin">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=plus-jakarta-sans@800,700,600,500,400,300&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/c23aa954-1326-4417-a9e4-e87d9c580ae4" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/b582a2bb-fc01-4c3d-a85e-412d08cddc0a" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/31b68e7c-7db7-4ec5-9dd0-f708b8d81f66" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/4a433344-b98a-46b7-96cf-fa7d75c8862f" as="document">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: '#1A1612',
+                        surface: '#241F1B',
+                        'surface-2': '#2D2823',
+                        'surface-3': '#3A342E',
+                        text: '#E8E0D5',
+                        'text-muted': '#C4B8A8',
+                        'text-subtle': '#948A7E',
+                        'text-faint': '#6B6157',
+                        primary: '#52B788',
+                        'primary-hover': '#74C69D',
+                        'primary-deep': '#2D6A4F',
+                        accent: '#F59E0B',
+                        'accent-deep': '#D97706',
+                        danger: '#E5484D',
+                        success: '#52B788',
+                        'primary-soft': 'rgba(82,183,136,0.12)',
+                        'accent-soft': 'rgba(245,158,11,0.10)',
+                        border: 'rgba(255,255,255,0.06)',
+                        'border-strong': 'rgba(255,255,255,0.09)'
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    boxShadow: {
+                        'elevation-1': '0 0 0 1px rgba(255,255,255,0.06)',
+                        'elevation-2': '0 0 0 1px rgba(255,255,255,0.09), 0 4px 12px rgba(0,0,0,0.3)',
+                        'elevation-3': '0 0 0 1px rgba(255,255,255,0.09), 0 8px 24px rgba(0,0,0,0.4)',
+                        'glow': '0 4px 20px rgba(45,106,79,0.3)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        html {
+            background-color: #1A1612;
+        }
+        @view-transition { navigation: auto; }
+        ::view-transition { background-color: #1A1612; }
+        ::view-transition-old(main-content) {
+            animation: 0.25s ease-out both fade-out;
+        }
+        ::view-transition-new(main-content) {
+            animation: 0.25s ease-in 0.1s both fade-in;
+        }
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+        .bg-grain {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.028;
+            mix-blend-mode: overlay;
+        }
+
+        .blob {
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: drift 25s ease-in-out infinite alternate;
+        }
+
+        @keyframes drift {
+            from { transform: translate(-10%, -10%) scale(1); }
+            to { transform: translate(10%, 10%) scale(1.1); }
+        }
+
+        .btn-shine {
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-shine::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent 45%, rgba(255,255,255,0.1) 50%, transparent 55%);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease-in-out;
+        }
+        .btn-shine:hover::after {
+            transform: translateX(100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen bg-bg text-text font-sans relative flex flex-col items-center justify-center p-6 overflow-hidden">
+        <!-- Decorative Blobs -->
+        <div class="absolute top-0 left-0 w-72 h-72 bg-primary-soft blob rounded-full z-0"></div>
+        <div class="absolute bottom-0 right-0 w-80 h-80 bg-accent-soft blob rounded-full z-0"></div>
+        
+        <!-- Grain Texture Overlay -->
+        <div class="absolute inset-0 bg-grain pointer-events-none z-0"></div>
+
+        <main style="view-transition-name: main-content" class="w-full max-w-sm flex flex-col items-center z-10">
+            <!-- Logo Section -->
+            <div class="mb-10 flex flex-col items-center">
+                <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/brand-assets/saji-logo/favicon.svg" 
+                     alt="Saji Logo" 
+                     class="w-24 h-24 mb-6 shadow-elevation-3 rounded-3xl">
+                
+                <h1 class="text-4xl font-extrabold tracking-tighter text-center">
+                    saji
+                    <span class="block h-1.5 w-12 bg-accent rounded-full mt-1 mx-auto"></span>
+                </h1>
+                <p class="mt-4 text-text-muted text-center font-medium">
+                    Makan enak hari ini. <span class="text-accent">Tanpa mikir.</span>
+                </p>
+            </div>
+
+            <!-- Login Form -->
+            <form class="w-full space-y-4">
+                <div class="space-y-2">
+                    <label for="email" class="text-[11px] font-bold text-text-subtle uppercase tracking-widest ml-1">Email</label>
+                    <input type="email" 
+                           id="email"
+                           placeholder="alamat@email.com"
+                           class="w-full bg-surface border border-border text-text px-5 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-text-faint">
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <label for="password" class="text-[11px] font-bold text-text-subtle uppercase tracking-widest ml-1">Kata Sandi</label>
+                        <a href="#forgot" class="text-[11px] font-bold text-accent uppercase tracking-widest" id="forgot-link">Lupa?</a>
+                    </div>
+                    <input type="password" 
+                           id="password"
+                           placeholder="••••••••"
+                           class="w-full bg-surface border border-border text-text px-5 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-text-faint">
+                </div>
+
+                <div class="pt-4">
+                    <a href="https://p.superdesign.dev/draft/c23aa954-1326-4417-a9e4-e87d9c580ae4" 
+                       id="login-submit-btn"
+                       class="btn-shine w-full bg-primary hover:bg-primary-hover text-[#1A1612] font-extrabold text-lg py-4 rounded-full shadow-glow transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                        Masuk
+                        <iconify-icon icon="lucide:arrow-right" class="text-xl"></iconify-icon>
+                    </a>
+                </div>
+            </form>
+
+            <!-- Footer Links -->
+            <div class="mt-8 text-center">
+                <p class="text-text-muted text-sm">
+                    Belum punya akun? 
+                    <a href="#register" id="register-link" class="text-accent font-bold hover:underline underline-offset-4 ml-1">Daftar gratis</a>
+                </p>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

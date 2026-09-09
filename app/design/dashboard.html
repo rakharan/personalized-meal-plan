@@ -1,0 +1,257 @@
+<!DOCTYPE html><html lang="en" class="antialiased"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saji Dashboard</title>
+    <!-- Prefetch flow pages for instant navigation -->
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/b582a2bb-fc01-4c3d-a85e-412d08cddc0a" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/31b68e7c-7db7-4ec5-9dd0-f708b8d81f66" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/4a433344-b98a-46b7-96cf-fa7d75c8862f" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/2ddb7570-d1de-451d-b303-6261615e6d67" as="document">
+    <meta name="view-transition" content="same-origin">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=plus-jakarta-sans@800,700,600,500,400,300&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: '#1A1612',
+                        surface: '#241F1B',
+                        'surface-2': '#2D2823',
+                        'surface-3': '#3A342E',
+                        text: '#E8E0D5',
+                        'text-muted': '#C4B8A8',
+                        'text-subtle': '#948A7E',
+                        'text-faint': '#6B6157',
+                        primary: '#52B788',
+                        'primary-hover': '#74C69D',
+                        'primary-deep': '#2D6A4F',
+                        accent: '#F59E0B',
+                        'accent-deep': '#D97706',
+                        danger: '#E5484D',
+                        success: '#52B788',
+                        'primary-soft': 'rgba(82,183,136,0.12)',
+                        'accent-soft': 'rgba(245,158,11,0.10)',
+                        border: 'rgba(255,255,255,0.06)',
+                        'border-strong': 'rgba(255,255,255,0.09)'
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    boxShadow: {
+                        'elevation-1': '0 0 0 1px rgba(255,255,255,0.06)',
+                        'elevation-2': '0 0 0 1px rgba(255,255,255,0.09), 0 4px 12px rgba(0,0,0,0.3)',
+                        'elevation-3': '0 0 0 1px rgba(255,255,255,0.09), 0 8px 24px rgba(0,0,0,0.4)',
+                        'glow': '0 4px 20px rgba(45,106,79,0.3)'
+                    },
+                    borderRadius: {
+                        'card-organic': '24px 28px 20px 32px'
+                    },
+                    keyframes: {
+                        shimmer: {
+                            '0%': { backgroundPosition: '200% 0' },
+                            '100%': { backgroundPosition: '-200% 0' }
+                        }
+                    },
+                    animation: {
+                        shimmer: 'shimmer 6s linear infinite'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .bg-grain {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.028;
+            mix-blend-mode: overlay;
+        }
+
+        /* View Transitions */
+        html { background-color: #1A1612; }
+        @view-transition { navigation: auto; }
+        ::view-transition { background-color: #1A1612; }
+
+        .header-nav { view-transition-name: main-nav; }
+        .bottom-nav { view-transition-name: bottom-nav; }
+        .brand-logo { view-transition-name: brand; }
+        .main-container { view-transition-name: main-content; }
+
+        ::view-transition-old(main-nav),
+        ::view-transition-new(main-nav),
+        ::view-transition-old(bottom-nav),
+        ::view-transition-new(bottom-nav),
+        ::view-transition-old(brand),
+        ::view-transition-new(brand) {
+            animation: none;
+            mix-blend-mode: normal;
+        }
+
+        ::view-transition-old(main-content) {
+            animation: 0.25s ease-out both fade-out;
+        }
+        ::view-transition-new(main-content) {
+            animation: 0.25s ease-in 0.1s both fade-in;
+        }
+
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="w-full h-screen flex flex-col bg-bg text-text font-sans relative overflow-hidden" data-sd-id="1">
+        <!-- Grain Texture Overlay -->
+        <div class="absolute inset-0 bg-grain pointer-events-none z-0 fixed" data-sd-id="2"></div>
+
+        <!-- Header -->
+        <header class="header-nav shrink-0 pt-14 pb-4 px-6 flex justify-between items-center z-10" data-sd-id="3">
+            <a href="https://p.superdesign.dev/draft/b582a2bb-fc01-4c3d-a85e-412d08cddc0a" id="nav-brand-link"><img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/brand-assets/saji-logo/favicon.svg" alt="Saji" class="brand-logo h-10 w-10" data-sd-id="4"></a>
+            <button class="bg-accent-soft text-accent px-3 py-1.5 rounded-full text-xs font-bold border border-border tracking-wide" data-sd-id="5">
+                PRO
+            </button>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-container flex-1 overflow-y-auto px-6 pb-24 z-10 flex flex-col gap-6" data-sd-id="6">
+            <!-- Streak Hero Card -->
+            <div class="bg-gradient-to-br from-primary-deep to-[#1b4332] rounded-card-organic p-6 shadow-elevation-2 relative overflow-hidden" data-sd-id="7">
+                <div class="flex items-center gap-2 mb-2" data-sd-id="8">
+                    <span class="text-xl" data-sd-id="9">🔥</span>
+                    <h2 class="text-sm font-semibold text-white tracking-wide" data-sd-id="10">Beruntun</h2>
+                </div>
+                <div class="flex items-baseline gap-2" data-sd-id="11">
+                    <span class="font-mono text-5xl font-bold text-white tabular-nums tracking-tighter" data-sd-id="12">5</span>
+                    <span class="text-white/80 text-sm font-medium" data-sd-id="13">hari berturut-turut</span>
+                </div>
+                <div class="mt-4" data-sd-id="14">
+                    <div class="h-1.5 w-full bg-white/20 rounded-full overflow-hidden" data-sd-id="15">
+                        <div class="h-full bg-white rounded-full w-[71.4%]" data-sd-id="16"></div>
+                    </div>
+                    <div class="flex justify-between mt-1.5 text-[10px] text-white/60 font-mono" data-sd-id="17">
+                        <span data-sd-id="18">0</span>
+                        <span data-sd-id="19">7 hari</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Today's Plan Card -->
+            <div class="bg-surface rounded-card-organic shadow-elevation-2 relative overflow-hidden" data-sd-id="20">
+                <!-- Shimmer border -->
+                <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-accent to-primary bg-[length:200%_auto] animate-shimmer" data-sd-id="21"></div>
+                
+                <div class="p-6" data-sd-id="22">
+                    <div class="flex justify-between items-start mb-6" data-sd-id="23">
+                        <div data-sd-id="24">
+                            <h2 class="text-2xl font-extrabold tracking-tight mb-1" data-sd-id="25">Hari ini</h2>
+                            <p class="text-text-muted text-sm" data-sd-id="26">Senin, 12 Feb</p>
+                        </div>
+                        <div class="bg-gradient-to-r from-primary-soft to-accent-soft px-3 py-1.5 rounded-full" data-sd-id="27">
+                            <span class="text-xs font-bold text-text-subtle tracking-wide" data-sd-id="28">Masakan Indonesia</span>
+                        </div>
+                    </div>
+
+                    <!-- Meal List -->
+                    <div class="flex flex-col gap-5" data-sd-id="29">
+                        <!-- Meal 1 -->
+                        <div class="flex gap-4" data-sd-id="30">
+                            <div class="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center text-xl shrink-0" data-sd-id="31">
+                                🍳
+                            </div>
+                            <div class="flex-1" data-sd-id="32">
+                                <h3 class="font-semibold text-[15px] mb-1" data-sd-id="33">Telur Dadar Padang</h3>
+                                <p class="text-text-muted text-xs mb-2" data-sd-id="34">Telur, daun bawang, cabai</p>
+                                <div class="flex gap-2" data-sd-id="35">
+                                    <span class="bg-surface-3 px-2 py-0.5 rounded text-[10px] font-mono text-text-muted" data-sd-id="36">210 kal</span>
+                                    <span class="bg-surface-3 px-2 py-0.5 rounded text-[10px] font-mono text-text-muted" data-sd-id="37">14g pro</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Meal 2 -->
+                        <div class="flex gap-4" data-sd-id="38">
+                            <div class="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center text-xl shrink-0" data-sd-id="39">
+                                🥬
+                            </div>
+                            <div class="flex-1" data-sd-id="40">
+                                <h3 class="font-semibold text-[15px] mb-1" data-sd-id="41">Tumis Kangkung Terasi</h3>
+                                <p class="text-text-muted text-xs mb-2" data-sd-id="42">Kangkung, terasi, bawang merah</p>
+                                <div class="flex gap-2" data-sd-id="43">
+                                    <span class="bg-surface-3 px-2 py-0.5 rounded text-[10px] font-mono text-text-muted" data-sd-id="44">85 kal</span>
+                                    <span class="bg-surface-3 px-2 py-0.5 rounded text-[10px] font-mono text-text-muted" data-sd-id="45">3g pro</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Meal 3 -->
+                        <div class="flex gap-4" data-sd-id="46">
+                            <div class="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center text-xl shrink-0" data-sd-id="47">
+                                🐟
+                            </div>
+                            <div class="flex-1" data-sd-id="48">
+                                <h3 class="font-semibold text-[15px] mb-1" data-sd-id="49">Ikan Kembung Bakar</h3>
+                                <p class="text-text-muted text-xs mb-2" data-sd-id="50">Ikan kembung, kecap manis, jeruk nipis</p>
+                                <div class="flex gap-2" data-sd-id="51">
+                                    <span class="bg-surface-3 px-2 py-0.5 rounded text-[10px] font-mono text-text-muted" data-sd-id="52">320 kal</span>
+                                    <span class="bg-surface-3 px-2 py-0.5 rounded text-[10px] font-mono text-text-muted" data-sd-id="53">28g pro</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Card Footer (Macros) -->
+                <div class="bg-surface-2 p-4 border-t border-border flex justify-between items-center" data-sd-id="54">
+                    <span class="text-sm font-medium text-text-muted" data-sd-id="55">Total Nutrisi</span>
+                    <div class="flex gap-3" data-sd-id="56">
+                        <span class="font-mono text-sm text-text" data-sd-id="57">615 <span class="text-[10px] text-text-subtle uppercase" data-sd-id="58">kal</span></span>
+                        <span class="text-border-strong" data-sd-id="59">|</span>
+                        <span class="font-mono text-sm text-text" data-sd-id="60">45g <span class="text-[10px] text-text-subtle uppercase" data-sd-id="61">pro</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-col gap-3 mt-2" data-sd-id="62">
+                <button class="w-full bg-primary hover:bg-primary-hover text-[#1A1612] font-bold text-lg py-4 rounded-full shadow-glow transition-all active:scale-[0.98] flex items-center justify-center gap-2" data-sd-id="63">
+                    <iconify-icon icon="lucide:check" class="text-xl"></iconify-icon>
+                    Sudah masak
+                </button>
+                
+                <div class="flex gap-3" data-sd-id="64">
+                    <a href="https://p.superdesign.dev/draft/4a433344-b98a-46b7-96cf-fa7d75c8862f" id="cta-grocery-link" class="flex-1 bg-surface-2 hover:bg-surface-3 text-text font-semibold py-3.5 rounded-2xl border border-border transition-colors flex items-center justify-center gap-2" data-sd-id="65">
+                        <span class="text-lg" data-sd-id="66">🛒</span>
+                        <span class="text-sm" data-sd-id="67">Belanja</span>
+                    </a>
+                    <button class="flex-1 bg-surface-2 hover:bg-surface-3 text-text font-semibold py-3.5 rounded-2xl border border-border transition-colors flex items-center justify-center gap-2" data-sd-id="68">
+                        <span class="text-lg" data-sd-id="69">🍳</span>
+                        <span class="text-sm" data-sd-id="70">Panduan</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav shrink-0 bg-surface border-t border-border pb-[34px] pt-3 px-6 z-40 fixed bottom-0 w-full" data-sd-id="71">
+            <div class="flex justify-between items-center" data-sd-id="72">
+                <a href="#" id="nav-home-link" class="flex flex-col items-center gap-1 text-primary" data-sd-id="73">
+                    <iconify-icon icon="lucide:layout-dashboard" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium" data-sd-id="74">Dasbor</span>
+                </a>
+                <a href="https://p.superdesign.dev/draft/31b68e7c-7db7-4ec5-9dd0-f708b8d81f66" id="nav-calendar-link" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors" data-sd-id="75">
+                    <iconify-icon icon="lucide:calendar" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium" data-sd-id="76">Kalender</span>
+                </a>
+                <a href="https://p.superdesign.dev/draft/4a433344-b98a-46b7-96cf-fa7d75c8862f" id="nav-shopping-link" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors" data-sd-id="77">
+                    <iconify-icon icon="lucide:shopping-cart" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium" data-sd-id="78">Belanja</span>
+                </a>
+                <a href="https://p.superdesign.dev/draft/2ddb7570-d1de-451d-b303-6261615e6d67" id="nav-profile-link" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors" data-sd-id="79">
+                    <iconify-icon icon="lucide:user" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium" data-sd-id="80">Profil</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+
+</body></html>

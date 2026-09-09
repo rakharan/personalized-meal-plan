@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daftar Belanja - Saji</title>
+    <meta name="view-transition" content="same-origin">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=plus-jakarta-sans@800,700,600,500,400,300&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/c23aa954-1326-4417-a9e4-e87d9c580ae4" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/b582a2bb-fc01-4c3d-a85e-412d08cddc0a" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/31b68e7c-7db7-4ec5-9dd0-f708b8d81f66" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/4a433344-b98a-46b7-96cf-fa7d75c8862f" as="document">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: '#1A1612',
+                        surface: '#241F1B',
+                        'surface-2': '#2D2823',
+                        'surface-3': '#3A342E',
+                        text: '#E8E0D5',
+                        'text-muted': '#C4B8A8',
+                        'text-subtle': '#948A7E',
+                        'text-faint': '#6B6157',
+                        primary: '#52B788',
+                        'primary-hover': '#74C69D',
+                        'primary-deep': '#2D6A4F',
+                        accent: '#F59E0B',
+                        'accent-deep': '#D97706',
+                        danger: '#E5484D',
+                        success: '#52B788',
+                        'primary-soft': 'rgba(82,183,136,0.12)',
+                        'accent-soft': 'rgba(245,158,11,0.10)',
+                        border: 'rgba(255,255,255,0.06)',
+                        'border-strong': 'rgba(255,255,255,0.09)'
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    boxShadow: {
+                        'elevation-1': '0 0 0 1px rgba(255,255,255,0.06)',
+                        'elevation-2': '0 0 0 1px rgba(255,255,255,0.09), 0 4px 12px rgba(0,0,0,0.3)',
+                        'elevation-3': '0 0 0 1px rgba(255,255,255,0.09), 0 8px 24px rgba(0,0,0,0.4)',
+                    },
+                    borderRadius: {
+                        'card-organic': '24px 28px 20px 32px'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        html { background-color: #1A1612; }
+        @view-transition { navigation: auto; }
+        ::view-transition { background-color: #1A1612; }
+        ::view-transition-old(main-nav), ::view-transition-new(main-nav) { animation: none; mix-blend-mode: normal; }
+        ::view-transition-old(main-content) { animation: 0.25s ease-out both fade-out; }
+        ::view-transition-new(main-content) { animation: 0.25s ease-in 0.1s both fade-in; }
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+        ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+        .bg-grain {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.028;
+            mix-blend-mode: overlay;
+        }
+
+        input[type="checkbox"]:checked + label .check-icon {
+            display: block;
+        }
+        input[type="checkbox"]:checked + label span {
+            text-decoration: line-through;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="w-full h-screen flex flex-col bg-bg text-text font-sans relative overflow-hidden">
+        <!-- Grain Texture Overlay -->
+        <div class="absolute inset-0 bg-grain pointer-events-none z-0 fixed"></div>
+
+        <!-- Header -->
+        <header class="shrink-0 pt-14 pb-4 px-6 flex justify-between items-end z-10">
+            <div>
+                <h1 class="text-2xl font-extrabold tracking-tight">Daftar Belanja</h1>
+                <p class="text-text-subtle text-xs font-mono uppercase tracking-widest">12 Feb - 18 Feb</p>
+            </div>
+            <button class="w-10 h-10 flex items-center justify-center bg-surface-2 rounded-full border border-border text-text-muted transition-active active:scale-90" id="btn-share-list">
+                <iconify-icon icon="lucide:share-2" class="text-lg"></iconify-icon>
+            </button>
+        </header>
+
+        <!-- Scrollable Content -->
+        <main class="flex-1 overflow-y-auto px-6 pb-32 z-10 flex flex-col gap-8" style="view-transition-name: main-content">
+            
+            <!-- Category: Protein -->
+            <section class="flex flex-col gap-3">
+                <div class="flex items-center gap-2 px-1">
+                    <div class="w-2 h-4 bg-primary rounded-full"></div>
+                    <h3 class="text-sm font-bold tracking-wide uppercase text-primary-hover">Protein</h3>
+                </div>
+                <div class="bg-surface rounded-card-organic p-4 border border-border shadow-elevation-1 flex flex-col gap-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="item-1" class="hidden">
+                            <label for="item-1" class="flex items-center gap-3 cursor-pointer">
+                                <div class="w-6 h-6 rounded-md border-2 border-primary-deep flex items-center justify-center text-primary">
+                                    <iconify-icon icon="lucide:check" class="check-icon hidden text-sm"></iconify-icon>
+                                </div>
+                                <span class="text-[15px] font-medium">Ikan Kembung</span>
+                            </label>
+                        </div>
+                        <span class="font-mono text-xs text-text-muted">3 ekor</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="item-2" class="hidden">
+                            <label for="item-2" class="flex items-center gap-3 cursor-pointer">
+                                <div class="w-6 h-6 rounded-md border-2 border-primary-deep flex items-center justify-center text-primary">
+                                    <iconify-icon icon="lucide:check" class="check-icon hidden text-sm"></iconify-icon>
+                                </div>
+                                <span class="text-[15px] font-medium">Telur Ayam</span>
+                            </label>
+                        </div>
+                        <span class="font-mono text-xs text-text-muted">1/2 kg</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Category: Sayur -->
+            <section class="flex flex-col gap-3">
+                <div class="flex items-center gap-2 px-1">
+                    <div class="w-2 h-4 bg-primary-deep rounded-full"></div>
+                    <h3 class="text-sm font-bold tracking-wide uppercase text-primary">Sayur</h3>
+                </div>
+                <div class="bg-surface rounded-card-organic p-4 border border-border shadow-elevation-1 flex flex-col gap-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="item-3" class="hidden">
+                            <label for="item-3" class="flex items-center gap-3 cursor-pointer">
+                                <div class="w-6 h-6 rounded-md border-2 border-primary-deep flex items-center justify-center text-primary">
+                                    <iconify-icon icon="lucide:check" class="check-icon hidden text-sm"></iconify-icon>
+                                </div>
+                                <span class="text-[15px] font-medium">Kangkung</span>
+                            </label>
+                        </div>
+                        <span class="font-mono text-xs text-text-muted">2 ikat</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="item-4" class="hidden">
+                            <label for="item-4" class="flex items-center gap-3 cursor-pointer">
+                                <div class="w-6 h-6 rounded-md border-2 border-primary-deep flex items-center justify-center text-primary">
+                                    <iconify-icon icon="lucide:check" class="check-icon hidden text-sm"></iconify-icon>
+                                </div>
+                                <span class="text-[15px] font-medium">Daun Bawang</span>
+                            </label>
+                        </div>
+                        <span class="font-mono text-xs text-text-muted">100 gr</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Category: Karbo -->
+            <section class="flex flex-col gap-3">
+                <div class="flex items-center gap-2 px-1">
+                    <div class="w-2 h-4 bg-accent rounded-full"></div>
+                    <h3 class="text-sm font-bold tracking-wide uppercase text-accent">Karbo</h3>
+                </div>
+                <div class="bg-surface rounded-card-organic p-4 border border-border shadow-elevation-1 flex flex-col gap-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="item-5" class="hidden">
+                            <label for="item-5" class="flex items-center gap-3 cursor-pointer">
+                                <div class="w-6 h-6 rounded-md border-2 border-accent-deep flex items-center justify-center text-accent">
+                                    <iconify-icon icon="lucide:check" class="check-icon hidden text-sm"></iconify-icon>
+                                </div>
+                                <span class="text-[15px] font-medium">Beras Putih</span>
+                            </label>
+                        </div>
+                        <span class="font-mono text-xs text-text-muted">5 kg</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Category: Bumbu -->
+            <section class="flex flex-col gap-3">
+                <div class="flex items-center gap-2 px-1">
+                    <div class="w-2 h-4 bg-text-subtle rounded-full"></div>
+                    <h3 class="text-sm font-bold tracking-wide uppercase text-text-muted">Bumbu</h3>
+                </div>
+                <div class="bg-surface rounded-card-organic p-4 border border-border shadow-elevation-1 flex flex-col gap-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="item-6" class="hidden">
+                            <label for="item-6" class="flex items-center gap-3 cursor-pointer">
+                                <div class="w-6 h-6 rounded-md border-2 border-surface-3 flex items-center justify-center text-text-muted">
+                                    <iconify-icon icon="lucide:check" class="check-icon hidden text-sm"></iconify-icon>
+                                </div>
+                                <span class="text-[15px] font-medium">Terasi Udang</span>
+                            </label>
+                        </div>
+                        <span class="font-mono text-xs text-text-muted">1 pack</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <input type="checkbox" id="item-7" class="hidden">
+                            <label for="item-7" class="flex items-center gap-3 cursor-pointer">
+                                <div class="w-6 h-6 rounded-md border-2 border-surface-3 flex items-center justify-center text-text-muted">
+                                    <iconify-icon icon="lucide:check" class="check-icon hidden text-sm"></iconify-icon>
+                                </div>
+                                <span class="text-[15px] font-medium">Kecap Manis</span>
+                            </label>
+                        </div>
+                        <span class="font-mono text-xs text-text-muted">275 ml</span>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="shrink-0 bg-surface border-t border-border pb-[34px] pt-3 px-6 z-40 fixed bottom-0 w-full" style="view-transition-name: main-nav">
+            <div class="flex justify-between items-center">
+                <a href="https://p.superdesign.dev/draft/c23aa954-1326-4417-a9e4-e87d9c580ae4" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors" id="nav-home">
+                    <iconify-icon icon="lucide:layout-dashboard" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Dasbor</span>
+                </a>
+                <a href="https://p.superdesign.dev/draft/31b68e7c-7db7-4ec5-9dd0-f708b8d81f66" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors" id="nav-calendar">
+                    <iconify-icon icon="lucide:calendar" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Kalender</span>
+                </a>
+                <a href="https://p.superdesign.dev/draft/4a433344-b98a-46b7-96cf-fa7d75c8862f" class="flex flex-col items-center gap-1 text-primary" id="nav-shopping">
+                    <iconify-icon icon="lucide:shopping-cart" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Belanja</span>
+                </a>
+                <a href="#profile" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors" id="nav-profile">
+                    <iconify-icon icon="lucide:user" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Profil</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+</body>
+</html>

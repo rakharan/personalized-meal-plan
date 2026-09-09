@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="id" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil - Saji</title>
+    <!-- Prefetch flow pages for instant navigation -->
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/c23aa954-1326-4417-a9e4-e87d9c580ae4" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/2ddb7570-d1de-451d-b303-6261615e6d67" as="document">
+    <meta name="view-transition" content="same-origin">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=plus-jakarta-sans@800,700,600,500,400,300&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: '#1A1612',
+                        surface: '#241F1B',
+                        'surface-2': '#2D2823',
+                        'surface-3': '#3A342E',
+                        text: '#E8E0D5',
+                        'text-muted': '#C4B8A8',
+                        'text-subtle': '#948A7E',
+                        'text-faint': '#6B6157',
+                        primary: '#52B788',
+                        'primary-hover': '#74C69D',
+                        'primary-deep': '#2D6A4F',
+                        accent: '#F59E0B',
+                        'accent-deep': '#D97706',
+                        danger: '#E5484D',
+                        success: '#52B788',
+                        'primary-soft': 'rgba(82,183,136,0.12)',
+                        'accent-soft': 'rgba(245,158,11,0.10)',
+                        border: 'rgba(255,255,255,0.06)',
+                        'border-strong': 'rgba(255,255,255,0.09)'
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    boxShadow: {
+                        'elevation-1': '0 0 0 1px rgba(255,255,255,0.06)',
+                        'elevation-2': '0 0 0 1px rgba(255,255,255,0.09), 0 4px 12px rgba(0,0,0,0.3)',
+                        'elevation-3': '0 0 0 1px rgba(255,255,255,0.09), 0 8px 24px rgba(0,0,0,0.4)',
+                        'glow': '0 4px 20px rgba(45,106,79,0.3)'
+                    },
+                    borderRadius: {
+                        'card-organic': '24px 28px 20px 32px'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .bg-grain {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.028;
+            mix-blend-mode: overlay;
+        }
+
+        /* View Transitions */
+        html { background-color: #1A1612; }
+        @view-transition { navigation: auto; }
+        ::view-transition { background-color: #1A1612; }
+
+        .bottom-nav { view-transition-name: bottom-nav; }
+        .brand-logo { view-transition-name: brand; }
+        .main-container { view-transition-name: main-content; }
+
+        ::view-transition-old(bottom-nav),
+        ::view-transition-new(bottom-nav),
+        ::view-transition-old(brand),
+        ::view-transition-new(brand) {
+            animation: none;
+            mix-blend-mode: normal;
+        }
+
+        ::view-transition-old(main-content) {
+            animation: 0.25s ease-out both fade-out;
+        }
+        ::view-transition-new(main-content) {
+            animation: 0.25s ease-in 0.1s both fade-in;
+        }
+
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen flex flex-col bg-bg text-text font-sans relative">
+        <!-- Grain Texture Overlay -->
+        <div class="fixed inset-0 bg-grain pointer-events-none z-0"></div>
+
+        <!-- Header -->
+        <header class="shrink-0 pt-14 pb-4 px-6 flex items-center justify-between z-10">
+            <div class="flex items-center gap-3">
+                <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/brand-assets/saji-logo/favicon.svg" alt="Saji" class="brand-logo h-10 w-10">
+                <h1 class="text-xl font-extrabold tracking-tight">Profil</h1>
+            </div>
+            <button class="p-2 text-text-muted">
+                <iconify-icon icon="lucide:settings" class="text-2xl"></iconify-icon>
+            </button>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-container flex-1 overflow-y-auto px-6 pb-32 z-10 flex flex-col gap-6">
+            <!-- User Card -->
+            <div class="bg-surface rounded-card-organic p-6 shadow-elevation-2 border border-border flex items-center gap-4">
+                <div class="w-16 h-16 rounded-full bg-surface-3 flex items-center justify-center border-2 border-primary-deep overflow-hidden">
+                    <span class="text-2xl font-bold text-text-muted">AD</span>
+                </div>
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <h2 class="text-lg font-bold">Adi Pratama</h2>
+                        <span class="bg-accent text-[#1A1612] px-2 py-0.5 rounded-md text-[10px] font-black tracking-tighter">PRO</span>
+                    </div>
+                    <p class="text-text-faint text-xs">adi.pratama@email.com</p>
+                </div>
+                <iconify-icon icon="lucide:chevron-right" class="text-text-faint"></iconify-icon>
+            </div>
+
+            <!-- Goal Card -->
+            <div class="bg-surface-2 rounded-card-organic p-5 shadow-elevation-1">
+                <h3 class="text-xs font-bold text-text-subtle uppercase tracking-widest mb-4">Target Nutrisi</h3>
+                <div class="flex flex-wrap gap-2">
+                    <div class="bg-primary-soft text-primary-hover border border-primary-deep/30 px-3 py-1.5 rounded-full flex items-center gap-2">
+                        <iconify-icon icon="lucide:flame" class="text-sm"></iconify-icon>
+                        <span class="text-xs font-bold">Naik massa otot</span>
+                    </div>
+                    <div class="bg-surface-3 border border-border px-3 py-1.5 rounded-full">
+                        <span class="font-mono text-xs text-text"><span class="font-bold">3000</span> <span class="text-[10px] text-text-faint uppercase">kal</span></span>
+                    </div>
+                    <div class="bg-surface-3 border border-border px-3 py-1.5 rounded-full">
+                        <span class="font-mono text-xs text-text"><span class="font-bold">100</span>g <span class="text-[10px] text-text-faint uppercase">pro</span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings List -->
+            <div class="flex flex-col gap-2">
+                <h3 class="px-2 text-xs font-bold text-text-faint uppercase tracking-widest mb-1">Preferensi Masak</h3>
+                
+                <div class="bg-surface rounded-2xl overflow-hidden border border-border shadow-elevation-1">
+                    <a href="#family" id="link-family" class="flex items-center gap-4 px-4 py-4 hover:bg-surface-2 transition-colors border-b border-border">
+                        <div class="w-10 h-10 rounded-xl bg-primary-soft flex items-center justify-center text-primary">
+                            <iconify-icon icon="lucide:users" class="text-xl"></iconify-icon>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-semibold">Keluarga & Rumah</p>
+                            <p class="text-[11px] text-text-faint">Kid-mode, budget harian</p>
+                        </div>
+                        <iconify-icon icon="lucide:chevron-right" class="text-text-faint"></iconify-icon>
+                    </a>
+                    
+                    <a href="#schedule" id="link-schedule" class="flex items-center gap-4 px-4 py-4 hover:bg-surface-2 transition-colors border-b border-border">
+                        <div class="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center text-accent">
+                            <iconify-icon icon="lucide:bell" class="text-xl"></iconify-icon>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-semibold">Jadwal Kirim</p>
+                            <p class="text-[11px] text-text-faint">Push notification menu</p>
+                        </div>
+                        <iconify-icon icon="lucide:chevron-right" class="text-text-faint"></iconify-icon>
+                    </a>
+
+                    <a href="#telegram" id="link-telegram" class="flex items-center gap-4 px-4 py-4 hover:bg-surface-2 transition-colors">
+                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                            <iconify-icon icon="lucide:send" class="text-xl"></iconify-icon>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-semibold">Koneksi Telegram</p>
+                            <p class="text-[11px] text-success flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-success animate-pulse"></span> Terhubung</p>
+                        </div>
+                        <iconify-icon icon="lucide:chevron-right" class="text-text-faint"></iconify-icon>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Second List -->
+            <div class="flex flex-col gap-2">
+                <div class="bg-surface rounded-2xl overflow-hidden border border-border shadow-elevation-1">
+                    <a href="#language" id="link-language" class="flex items-center gap-4 px-4 py-4 hover:bg-surface-2 transition-colors border-b border-border">
+                        <div class="w-10 h-10 rounded-xl bg-surface-3 flex items-center justify-center text-text-muted">
+                            <iconify-icon icon="lucide:languages" class="text-xl"></iconify-icon>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-semibold">Bahasa</p>
+                            <p class="text-[11px] text-text-faint">Bahasa Indonesia</p>
+                        </div>
+                        <iconify-icon icon="lucide:chevron-right" class="text-text-faint"></iconify-icon>
+                    </a>
+                    
+                    <a href="#pro-upgrade" id="link-upgrade" class="flex items-center gap-4 px-4 py-4 bg-accent-soft hover:bg-accent/20 transition-colors">
+                        <div class="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-[#1A1612]">
+                            <iconify-icon icon="lucide:zap" class="text-xl"></iconify-icon>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-bold text-accent">Saji Pro</p>
+                            <p class="text-[11px] text-accent/70">Lihat fitur eksklusif kamu</p>
+                        </div>
+                        <iconify-icon icon="lucide:chevron-right" class="text-accent"></iconify-icon>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Logout -->
+            <button class="w-full py-4 text-danger font-bold text-sm bg-danger/10 border border-danger/20 rounded-2xl flex items-center justify-center gap-2 mt-2 transition-all active:scale-[0.98]">
+                <iconify-icon icon="lucide:log-out" class="text-lg"></iconify-icon>
+                Keluar Akun
+            </button>
+
+            <div class="text-center py-4">
+                <p class="text-[10px] text-text-faint font-mono tracking-widest uppercase">Saji v1.2.4 — Made with ❤️ in Jakarta</p>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav shrink-0 bg-surface border-t border-border pb-[34px] pt-3 px-6 z-40 fixed bottom-0 w-full">
+            <div class="flex justify-between items-center">
+                <a href="https://p.superdesign.dev/draft/c23aa954-1326-4417-a9e4-e87d9c580ae4" id="nav-home-link" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors">
+                    <iconify-icon icon="lucide:layout-dashboard" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Dasbor</span>
+                </a>
+                <a href="#calendar" id="nav-calendar-link" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors">
+                    <iconify-icon icon="lucide:calendar" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Kalender</span>
+                </a>
+                <a href="#grocery" id="nav-shopping-link" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors">
+                    <iconify-icon icon="lucide:shopping-cart" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Belanja</span>
+                </a>
+                <a href="https://p.superdesign.dev/draft/2ddb7570-d1de-451d-b303-6261615e6d67" id="nav-profile-link" class="flex flex-col items-center gap-1 text-primary">
+                    <iconify-icon icon="lucide:user" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Profil</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+</body>
+</html>

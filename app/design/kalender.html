@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="id" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalender - Saji</title>
+    <meta name="view-transition" content="same-origin">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link href="https://api.fontshare.com/v2/css?f[]=plus-jakarta-sans@800,700,600,500,400,300&amp;display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+    
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/c23aa954-1326-4417-a9e4-e87d9c580ae4" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/b582a2bb-fc01-4c3d-a85e-412d08cddc0a" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/4a433344-b98a-46b7-96cf-fa7d75c8862f" as="document">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: '#1A1612',
+                        surface: '#241F1B',
+                        'surface-2': '#2D2823',
+                        'surface-3': '#3A342E',
+                        text: '#E8E0D5',
+                        'text-muted': '#C4B8A8',
+                        'text-subtle': '#948A7E',
+                        'text-faint': '#6B6157',
+                        primary: '#52B788',
+                        'primary-hover': '#74C69D',
+                        'primary-deep': '#2D6A4F',
+                        accent: '#F59E0B',
+                        'accent-deep': '#D97706',
+                        danger: '#E5484D',
+                        success: '#52B788',
+                        'primary-soft': 'rgba(82,183,136,0.12)',
+                        'accent-soft': 'rgba(245,158,11,0.10)',
+                        border: 'rgba(255,255,255,0.06)',
+                        'border-strong': 'rgba(255,255,255,0.09)'
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    },
+                    boxShadow: {
+                        'elevation-1': '0 0 0 1px rgba(255,255,255,0.06)',
+                        'elevation-2': '0 0 0 1px rgba(255,255,255,0.09), 0 4px 12px rgba(0,0,0,0.3)',
+                        'elevation-3': '0 0 0 1px rgba(255,255,255,0.09), 0 8px 24px rgba(0,0,0,0.4)',
+                        'glow': '0 4px 20px rgba(45,106,79,0.3)'
+                    },
+                    borderRadius: {
+                        'card-organic': '24px 28px 20px 32px'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .bg-grain {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            opacity: 0.028;
+            mix-blend-mode: overlay;
+        }
+
+        html {
+            background-color: #1A1612;
+        }
+        @view-transition {
+            navigation: auto;
+        }
+        ::view-transition {
+            background-color: #1A1612;
+        }
+
+        ::view-transition-old(main-nav),
+        ::view-transition-new(main-nav) {
+            animation: none;
+            mix-blend-mode: normal;
+        }
+
+        ::view-transition-old(main-content) {
+            animation: 0.25s ease-out both fade-out;
+        }
+        ::view-transition-new(main-content) {
+            animation: 0.25s ease-in 0.1s both fade-in;
+        }
+
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+        .ring-fill {
+            stroke-dasharray: 283;
+            stroke-dashoffset: 80;
+        }
+    </style>
+</head>
+<body>
+    <div class="w-full h-screen flex flex-col bg-bg text-text font-sans relative overflow-hidden">
+        <!-- Grain Texture Overlay -->
+        <div class="absolute inset-0 bg-grain pointer-events-none z-0 fixed"></div>
+
+        <!-- Header -->
+        <header class="shrink-0 pt-14 pb-4 px-6 flex justify-between items-center z-10">
+            <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/brand-assets/saji-logo/favicon.svg" alt="Saji" class="h-10 w-10">
+            <h1 class="text-lg font-bold tracking-tight">Kalender</h1>
+            <div class="w-10 flex justify-end">
+                <iconify-icon icon="lucide:more-vertical" class="text-xl text-text-subtle"></iconify-icon>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main style="view-transition-name: main-content" class="flex-1 overflow-y-auto px-6 pb-28 z-10 flex flex-col gap-6">
+            
+            <!-- Week Strip -->
+            <section class="flex justify-between items-center gap-2 overflow-x-auto no-scrollbar py-2">
+                <div class="flex flex-col items-center gap-2 min-w-[48px]">
+                    <span class="text-[10px] uppercase font-bold text-text-faint tracking-wider">Sen</span>
+                    <div class="w-12 h-16 bg-surface-2 rounded-2xl flex flex-col items-center justify-center gap-1 border border-border">
+                        <span class="font-mono font-bold">12</span>
+                        <iconify-icon icon="lucide:check-circle-2" class="text-primary text-xs"></iconify-icon>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center gap-2 min-w-[48px]">
+                    <span class="text-[10px] uppercase font-bold text-text-faint tracking-wider">Sel</span>
+                    <div class="w-12 h-16 bg-surface-2 rounded-2xl flex flex-col items-center justify-center gap-1 border border-border">
+                        <span class="font-mono font-bold">13</span>
+                        <iconify-icon icon="lucide:check-circle-2" class="text-primary text-xs"></iconify-icon>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center gap-2 min-w-[48px]">
+                    <span class="text-[10px] uppercase font-bold text-accent tracking-wider">Rab</span>
+                    <div class="w-12 h-16 bg-accent-soft rounded-2xl flex flex-col items-center justify-center gap-1 border border-accent/30 ring-2 ring-accent/20">
+                        <span class="font-mono font-bold text-accent">14</span>
+                        <div class="w-1.5 h-1.5 rounded-full bg-accent"></div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center gap-2 min-w-[48px]">
+                    <span class="text-[10px] uppercase font-bold text-text-faint tracking-wider">Kam</span>
+                    <div class="w-12 h-16 bg-surface-2 rounded-2xl flex flex-col items-center justify-center gap-1 border border-border">
+                        <span class="font-mono font-bold">15</span>
+                        <iconify-icon icon="lucide:x-circle" class="text-text-faint text-xs"></iconify-icon>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center gap-2 min-w-[48px]">
+                    <span class="text-[10px] uppercase font-bold text-text-faint tracking-wider">Jum</span>
+                    <div class="w-12 h-16 bg-surface-2 rounded-2xl flex flex-col items-center justify-center gap-1 border border-border">
+                        <span class="font-mono font-bold">16</span>
+                        <div class="w-1.5 h-1.5 rounded-full bg-text-faint opacity-30"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Row -->
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Streak Card -->
+                <div class="bg-gradient-to-br from-primary-deep to-[#1b4332] rounded-card-organic p-5 shadow-elevation-2">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-lg">🔥</span>
+                        <h2 class="text-[10px] font-bold text-white/80 uppercase tracking-widest">Streak</h2>
+                    </div>
+                    <div class="flex items-baseline gap-1">
+                        <span class="font-mono text-4xl font-bold text-white tabular-nums">5</span>
+                        <span class="text-white/70 text-[10px] font-medium">hari</span>
+                    </div>
+                </div>
+
+                <!-- Weekly Progress Ring -->
+                <div class="bg-surface rounded-card-organic p-5 shadow-elevation-2 flex items-center gap-4">
+                    <div class="relative w-12 h-12">
+                        <svg class="w-full h-full transform -rotate-90">
+                            <circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="4" fill="transparent" class="text-surface-3" />
+                            <circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="4" fill="transparent" stroke-dasharray="131.9" stroke-dashoffset="37.7" class="text-primary ring-fill" stroke-linecap="round" />
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center font-mono text-[10px] font-bold">
+                            5/7
+                        </div>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-[10px] font-bold text-text-subtle uppercase tracking-widest">Target</span>
+                        <span class="text-xs font-semibold">71% Selesai</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Badges Grid -->
+            <section>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-bold tracking-wide">Pencapaian</h3>
+                    <a href="#all-badges" class="text-xs text-primary font-bold">Lihat Semua</a>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- Badge 1: Chef Pemula -->
+                    <div class="bg-surface-2 p-5 rounded-card-organic border border-border flex flex-col items-center text-center">
+                        <div class="w-14 h-14 rounded-full bg-primary-soft flex items-center justify-center mb-3">
+                            <iconify-icon icon="lucide:utensils" class="text-2xl text-primary"></iconify-icon>
+                        </div>
+                        <h4 class="text-xs font-bold mb-1">Chef Pemula</h4>
+                        <p class="text-[10px] text-text-muted">Masak 5 kali seminggu</p>
+                    </div>
+
+                    <!-- Badge 2: Food Explorer -->
+                    <div class="bg-surface-2 p-5 rounded-card-organic border border-border flex flex-col items-center text-center">
+                        <div class="w-14 h-14 rounded-full bg-accent-soft flex items-center justify-center mb-3">
+                            <iconify-icon icon="lucide:map" class="text-2xl text-accent"></iconify-icon>
+                        </div>
+                        <h4 class="text-xs font-bold mb-1">Food Explorer</h4>
+                        <p class="text-[10px] text-text-muted">Coba 3 jenis masakan</p>
+                    </div>
+
+                    <!-- Badge 3: Protein Master -->
+                    <div class="bg-surface-2 p-5 rounded-card-organic border border-border flex flex-col items-center text-center">
+                        <div class="w-14 h-14 rounded-full bg-primary-soft flex items-center justify-center mb-3">
+                            <iconify-icon icon="lucide:dumbbell" class="text-2xl text-primary"></iconify-icon>
+                        </div>
+                        <h4 class="text-xs font-bold mb-1">Protein Master</h4>
+                        <p class="text-[10px] text-text-muted">Capai target protein</p>
+                    </div>
+
+                    <!-- Badge 4: Saji Legend (Locked) -->
+                    <div class="bg-surface-2/40 p-5 rounded-card-organic border border-border/50 flex flex-col items-center text-center grayscale opacity-50 relative overflow-hidden">
+                        <div class="absolute top-2 right-2">
+                            <iconify-icon icon="lucide:lock" class="text-xs text-text-faint"></iconify-icon>
+                        </div>
+                        <div class="w-14 h-14 rounded-full bg-surface-3 flex items-center justify-center mb-3">
+                            <iconify-icon icon="lucide:trophy" class="text-2xl text-text-muted"></iconify-icon>
+                        </div>
+                        <h4 class="text-xs font-bold mb-1">Saji Legend</h4>
+                        <p class="text-[10px] text-text-muted">Streak 30 hari</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Section Hint -->
+            <div class="mt-4 p-4 bg-surface rounded-2xl border border-dashed border-border flex items-center justify-center gap-3">
+                <iconify-icon icon="lucide:history" class="text-text-subtle"></iconify-icon>
+                <span class="text-xs text-text-muted font-medium">Tarik ke atas untuk riwayat lengkap</span>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav style="view-transition-name: main-nav" class="shrink-0 bg-surface border-t border-border pb-[34px] pt-3 px-6 z-40 fixed bottom-0 w-full">
+            <div class="flex justify-between items-center">
+                <a href="https://p.superdesign.dev/draft/c23aa954-1326-4417-a9e4-e87d9c580ae4" id="nav-dashboard-link" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors">
+                    <iconify-icon icon="lucide:layout-dashboard" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Dasbor</span>
+                </a>
+                <a href="https://p.superdesign.dev/draft/31b68e7c-7db7-4ec5-9dd0-f708b8d81f66" id="nav-calendar-link" class="flex flex-col items-center gap-1 text-primary">
+                    <iconify-icon icon="lucide:calendar" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Kalender</span>
+                </a>
+                <a href="https://p.superdesign.dev/draft/4a433344-b98a-46b7-96cf-fa7d75c8862f" id="nav-grocery-link" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors">
+                    <iconify-icon icon="lucide:shopping-cart" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Belanja</span>
+                </a>
+                <a href="#profile" id="nav-profile-link" class="flex flex-col items-center gap-1 text-text-faint hover:text-text-muted transition-colors">
+                    <iconify-icon icon="lucide:user" class="text-2xl"></iconify-icon>
+                    <span class="text-[10px] font-medium">Profil</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+</body>
+</html>
