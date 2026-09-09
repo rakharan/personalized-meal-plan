@@ -10,6 +10,7 @@ import {
   consumeTelegramLinkToken, savePlanHistory, getPlanHistory,
   markCooked, getWebUserStreak, getWeekCalendar, getBadges,
   setUserTier, getWeekPlanTexts, getYesterdayPlanText,
+  assemblePlanFromLibrary, markRecipesUsed, getRecentRecipeIds, seedRecipesFromPlan,
   saveWhatsAppOTP, verifyWhatsAppOTP,
   getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
   getHealthScore, getAlerts, getTodaySnapshot, getRecentUsers, getPowerUsers, getAtRiskUsers, getFeedbackWall, getPlanQuality, getPushStatus,
@@ -477,6 +478,36 @@ app.post('/api/plans/generate', userAuth, async (req: Request, res: Response) =>
       budgetWeekly: user.budget_weekly ? `Rp${user.budget_weekly.toLocaleString('id-ID')}/minggu` : '',
     };
 
+    // ── Try recipe library first — no LLM call if coverage is good ──
+    const avoidAllergens: string[] = [];
+    if (/kacang|peanut/i.test(user.allergies || '')) avoidAllergens.push('peanut');
+    if (/udang|seafood|shellfish|kerang/i.test(user.allergies || '')) avoidAllergens.push('shellfish');
+    if (/susu|dairy|laktosa/i.test(user.allergies || '')) avoidAllergens.push('dairy');
+    if (/babi|pork/i.test(user.allergies || '') || /halal/i.test(user.dietary_restrictions || '')) avoidAllergens.push('pork');
+
+    const recentIds = await getRecentRecipeIds(userId, 7).catch(() => [] as number[]);
+    const assembled = await assemblePlanFromLibrary({
+      cuisine: user.cuisine_rotation === 'rotate' ? null : user.cuisine_rotation,
+      mealsPerDay: user.meals_per_day || 3,
+      targetKcal: user.target_calories,
+      targetProtein: user.target_protein,
+      avoidAllergens,
+      kidFriendly: user.kid_friendly,
+      quick: user.quick_meals,
+      recentRecipeIds: recentIds,
+      locale: user.locale as 'en' | 'id',
+    }).catch(() => null);
+
+    if (assembled && assembled.coverage >= 0.7) {
+      const cuisine = parseCuisine(assembled.planText);
+      await savePlanHistory(userId, assembled.planText, cuisine, user.target_calories, user.target_protein);
+      markRecipesUsed(assembled.recipes.map(r => r.id)).catch(() => {});
+      const meals = parsePlanMeals(assembled.planText);
+      res.json({ plan: assembled.planText, cuisine, meals, source: 'library' });
+      return;
+    }
+
+    // ── LLM fallback (also seeds library for next time) ──
     const plan = await generateMealPlan(answers, {
       locale: user.locale as 'en' | 'id',
       avoidCuisines: [],
@@ -491,6 +522,8 @@ app.post('/api/plans/generate', userAuth, async (req: Request, res: Response) =>
 
     const cuisine = parseCuisine(plan);
     await savePlanHistory(userId, plan, cuisine, user.target_calories, user.target_protein);
+    // Seed recipe library from LLM output — future plans assemble without LLM
+    seedRecipesFromPlan(plan, cuisine, 'llm-new').catch(() => {});
     const meals = parsePlanMeals(plan);
     res.json({ plan, cuisine, meals });
   } catch (err: any) {

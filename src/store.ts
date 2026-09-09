@@ -306,6 +306,35 @@ export async function migrateSchema(): Promise<void> {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_push_log_created ON push_log(created_at);');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_push_log_status ON push_log(status);');
+
+  // ── Recipe library — global reusable meals, assembled without LLM ──
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS recipes (
+      id            SERIAL PRIMARY KEY,
+      name          TEXT NOT NULL,
+      cuisine       TEXT,
+      meal_type     TEXT NOT NULL,        -- sarapan | snack | makan siang | makan malam
+      items         JSONB NOT NULL,       -- ["nasi 200g", "ayam 150g"]
+      kcal          INTEGER NOT NULL DEFAULT 0,
+      protein       INTEGER NOT NULL DEFAULT 0,
+      carbs         INTEGER NOT NULL DEFAULT 0,
+      fat           INTEGER NOT NULL DEFAULT 0,
+      kid_friendly  INTEGER NOT NULL DEFAULT 0,
+      quick         INTEGER NOT NULL DEFAULT 0,   -- <30 min
+      budget_tier   TEXT,                  -- cheap | moderate | premium
+      tags          TEXT[] NOT NULL DEFAULT '{}',  -- halal, no-peanut, goreng, bakar, etc.
+      steps         TEXT,                  -- cached cooking steps
+      source        TEXT NOT NULL DEFAULT 'llm-new',  -- llm-backfill | llm-new | user | curated
+      times_used    INTEGER NOT NULL DEFAULT 0,
+      last_used_at  TIMESTAMPTZ,
+      rating_sum    INTEGER NOT NULL DEFAULT 0,
+      rating_count  INTEGER NOT NULL DEFAULT 0,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (name, cuisine, meal_type)
+    );
+  `);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_recipes_cuisine ON recipes(cuisine, meal_type);');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_recipes_usage ON recipes(times_used, last_used_at);');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1156,7 +1185,297 @@ export async function getWebUserStreak(userId: number): Promise<number> {
     }
 
 
-    // ── WhatsApp OTP ──
+    // ────────────────────────────────────────────────────────────────────────────
+// Recipe library — global reusable meals
+// ────────────────────────────────────────────────────────────────────────────
+export interface Recipe {
+  id: number;
+  name: string;
+  cuisine: string | null;
+  meal_type: string;
+  items: string[];
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  kid_friendly: boolean;
+  quick: boolean;
+  budget_tier: string | null;
+  tags: string[];
+  steps: string | null;
+  source: string;
+  times_used: number;
+  last_used_at: Date | null;
+  rating_sum: number;
+  rating_count: number;
+}
+
+// Normalize meal name to slot type
+function mealTypeOf(mealName: string): string {
+  const k = mealName.toLowerCase();
+  if (k.includes('sarapan') || k.includes('breakfast') || k.includes('brunch')) return 'sarapan';
+  if (k.includes('siang') || k.includes('lunch')) return 'makan siang';
+  if (k.includes('malam') || k.includes('dinner')) return 'makan malam';
+  return 'snack';
+}
+
+// Extract tags from recipe text (allergy-relevant keywords + cooking method)
+const TAG_PATTERNS: [RegExp, string][] = [
+  [/kacang|peanut/i, 'peanut'],
+  [/udang|cumi|kerang|kepiting|seafood/i, 'shellfish'],
+  [/susu|keju|yogurt|dairy|santan/i, 'dairy'],
+  [/babi|pork|bacon|ham/i, 'pork'],
+  [/goreng/i, 'goreng'],
+  [/bakar|panggang/i, 'bakar'],
+  [/rebus|kukus|pepes/i, 'rebus'],
+  [/tumis/i, 'tumis'],
+  [/pedas|cabai|cabe|sambal/i, 'pedas'],
+];
+
+function tagsOf(name: string, items: string[]): string[] {
+  const hay = (name + ' ' + items.join(' ')).toLowerCase();
+  const tags = new Set<string>();
+  for (const [re, tag] of TAG_PATTERNS) {
+    if (re.test(hay)) tags.add(tag);
+  }
+  if (!tags.has('pork')) tags.add('halal-ok'); // default assumption: no pork = halal-ok
+  return [...tags];
+}
+
+function kidFriendlyOf(name: string, items: string[]): boolean {
+  const hay = (name + ' ' + items.join(' ')).toLowerCase();
+  return !/pedas|cabai|cabe|sambal|lada hitam/i.test(hay);
+}
+
+function quickOf(name: string, items: string[]): boolean {
+  const hay = (name + ' ' + items.join(' ')).toLowerCase();
+  return !/rendang|bakso|soto betawi|gulai|opor|rawon|marinasi semalam/i.test(hay);
+}
+
+export async function upsertRecipe(r: {
+  name: string; cuisine: string | null; mealName: string;
+  items: string[]; kcal: number; protein: number; carbs: number; fat: number;
+  source?: string;
+}): Promise<number> {
+  const mealType = mealTypeOf(r.mealName);
+  const tags = tagsOf(r.name, r.items);
+  const { rows } = await pool.query(
+    `INSERT INTO recipes (name, cuisine, meal_type, items, kcal, protein, carbs, fat,
+                          kid_friendly, quick, tags, source)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     ON CONFLICT (name, cuisine, meal_type)
+     DO UPDATE SET items=$4, kcal=$5, protein=$6, carbs=$7, fat=$8, tags=$11
+     RETURNING id`,
+    [r.name, r.cuisine, mealType, JSON.stringify(r.items), r.kcal, r.protein, r.carbs, r.fat,
+     kidFriendlyOf(r.name, r.items) ? 1 : 0, quickOf(r.name, r.items) ? 1 : 0,
+     tags, r.source || 'llm-new']
+  );
+  return rows[0].id;
+}
+
+export interface RecipeQuery {
+  cuisine?: string | null;
+  mealTypes: string[];
+  avoidAllergens?: string[];   // e.g. ['peanut','shellfish','dairy']
+  kidFriendly?: boolean;
+  quick?: boolean;
+  maxPerType?: number;
+  excludeRecipeIds?: number[];
+}
+
+export async function queryRecipes(q: RecipeQuery): Promise<Recipe[]> {
+  const conditions: string[] = ["meal_type = ANY($1)"];
+  const params: any[] = [q.mealTypes];
+  let idx = 2;
+  if (q.cuisine) {
+    conditions.push(`(cuisine ILIKE $${idx} OR cuisine IS NULL)`);
+    params.push(`%${q.cuisine}%`);
+    idx++;
+  }
+  if (q.avoidAllergens?.length) {
+    conditions.push(`NOT (tags && $${idx})`);
+    params.push(q.avoidAllergens);
+    idx++;
+  }
+  if (q.kidFriendly) { conditions.push('kid_friendly = 1'); }
+  if (q.quick) { conditions.push('quick = 1'); }
+  if (q.excludeRecipeIds?.length) {
+    conditions.push(`NOT (id = ANY($${idx}))`);
+    params.push(q.excludeRecipeIds);
+    idx++;
+  }
+  const { rows } = await pool.query(
+    `SELECT * FROM recipes WHERE ${conditions.join(' AND ')}
+     ORDER BY times_used ASC, last_used_at ASC NULLS FIRST, rating_count DESC
+     LIMIT 100`,
+    params
+  );
+  return rows.map((r: any) => ({
+    ...r,
+    items: Array.isArray(r.items) ? r.items : JSON.parse(r.items),
+    kid_friendly: !!r.kid_friendly,
+    quick: !!r.quick,
+  }));
+}
+
+export async function markRecipesUsed(ids: number[]): Promise<void> {
+  if (!ids.length) return;
+  await pool.query(
+    'UPDATE recipes SET times_used = times_used + 1, last_used_at = NOW() WHERE id = ANY($1)',
+    [ids]
+  );
+}
+
+export async function rateRecipes(ids: number[], good: boolean): Promise<void> {
+  if (!ids.length) return;
+  await pool.query(
+    `UPDATE recipes SET rating_sum = rating_sum + $1, rating_count = rating_count + 1 WHERE id = ANY($2)`,
+    [good ? 1 : -1, ids]
+  );
+}
+
+// Seed from a parsed plan (all meals → recipe rows)
+export async function seedRecipesFromPlan(planText: string, cuisine: string | null, source: string): Promise<number> {
+  const meals = parsePlanMeals(planText);
+  let n = 0;
+  for (const m of meals) {
+    if (!m.kcal && !m.items.length) continue;
+    // Recipe name = meal name + first item (disambiguates generic "SARAPAN")
+    const firstItem = (m.items[0] || '').split(':')[0].slice(0, 60);
+    const recipeName = firstItem ? `${m.name} — ${firstItem}` : m.name;
+    await upsertRecipe({
+      name: recipeName, cuisine, mealName: m.name,
+      items: m.items, kcal: m.kcal, protein: m.protein, carbs: m.carbs, fat: m.fat,
+      source,
+    });
+    n++;
+  }
+  return n;
+}
+
+// Assemble a day plan from library. Returns plan text + coverage (0-1).
+export async function assemblePlanFromLibrary(opts: {
+  cuisine: string | null;
+  mealsPerDay: number;
+  targetKcal: number | null;
+  targetProtein: number | null;
+  avoidAllergens: string[];
+  kidFriendly: boolean;
+  quick: boolean;
+  recentRecipeIds: number[];   // user's last 7 days — avoid repeats
+  locale: 'en' | 'id';
+}): Promise<{ planText: string; recipes: Recipe[]; coverage: number } | null> {
+  const slotOrder = ['sarapan', 'snack', 'makan siang', 'makan malam'];
+  const slots = slotOrder.slice(0, Math.min(Math.max(opts.mealsPerDay, 3), 4));
+  if (opts.mealsPerDay === 3) slots.splice(1, 1); // drop snack for 3-meal plans
+
+  const candidates = await queryRecipes({
+    cuisine: opts.cuisine,
+    mealTypes: slots,
+    avoidAllergens: opts.avoidAllergens,
+    kidFriendly: opts.kidFriendly,
+    quick: opts.quick,
+    excludeRecipeIds: opts.recentRecipeIds,
+  });
+  if (!candidates.length) return null;
+
+  // Greedy pick per slot, tracking macro totals
+  const picked: Recipe[] = [];
+  const usedIds = new Set<number>();
+  let totKcal = 0;
+  const targetKcal = opts.targetKcal || 0;
+  for (const slot of slots) {
+    const poolForSlot = candidates.filter(c => c.meal_type === slot && !usedIds.has(c.id));
+    if (!poolForSlot.length) continue;
+    // Pick best macro fit: prefer recipes that keep us near target pace
+    const remaining = slots.length - picked.length;
+    const idealKcal = targetKcal ? (targetKcal - totKcal) / remaining : 0;
+    poolForSlot.sort((a, b) => {
+      const da = idealKcal ? Math.abs(a.kcal - idealKcal) : 0;
+      const db = idealKcal ? Math.abs(b.kcal - idealKcal) : 0;
+      return da - db;
+    });
+    const pick = poolForSlot[0];
+    picked.push(pick);
+    usedIds.add(pick.id);
+    totKcal += pick.kcal;
+  }
+
+  // ── Refinement pass: if under 85% kcal target, swap lightest slot for heavier option ──
+  if (targetKcal && totKcal < targetKcal * 0.85 && picked.length > 0) {
+    for (let attempt = 0; attempt < 2 && totKcal < targetKcal * 0.85; attempt++) {
+      // Lightest picked slot
+      let lightIdx = 0;
+      for (let i = 1; i < picked.length; i++) {
+        if (picked[i].kcal < picked[lightIdx].kcal) lightIdx = i;
+      }
+      const slot = picked[lightIdx].meal_type;
+      const alternatives = candidates
+        .filter(c => c.meal_type === slot && !usedIds.has(c.id) && c.kcal > picked[lightIdx].kcal)
+        .sort((a, b) => b.kcal - a.kcal);
+      if (!alternatives.length) break;
+      const upgrade = alternatives[0];
+      totKcal += upgrade.kcal - picked[lightIdx].kcal;
+      usedIds.delete(picked[lightIdx].id);
+      usedIds.add(upgrade.id);
+      picked[lightIdx] = upgrade;
+    }
+  }
+
+  const coverage = picked.length / slots.length;
+  if (picked.length === 0) return null;
+
+  // Render plan text in same format as LLM output (parser-compatible)
+  const id = opts.locale === 'id';
+  const header = `${id ? 'Hari ini' : 'Today'}: ${opts.cuisine || (id ? 'Campuran' : 'Mixed')}`;
+  const totProtein = picked.reduce((s, r) => s + r.protein, 0);
+  const totCarbs = picked.reduce((s, r) => s + r.carbs, 0);
+  const totFat = picked.reduce((s, r) => s + r.fat, 0);
+  const targetLine = opts.targetKcal
+    ? `${id ? 'Target' : 'Target'}: ${opts.targetKcal} kkal, ${opts.targetProtein || 0}g protein. Plan: ~${totKcal} kkal, ${totProtein}g protein.`
+    : `Plan: ~${totKcal} kkal, ${totProtein}g protein.`;
+  const mealBlocks = picked.map(r => {
+    const name = r.meal_type === 'sarapan' ? (id ? 'SARAPAN' : 'BREAKFAST')
+      : r.meal_type === 'makan siang' ? (id ? 'MAKAN SIANG' : 'LUNCH')
+      : r.meal_type === 'makan malam' ? (id ? 'MAKAN MALAM' : 'DINNER')
+      : 'SNACK';
+    const title = r.name.includes(' — ') ? r.name.split(' — ')[1] : r.name;
+    const lines = [
+      `${name} (~${r.kcal} kkal, ${r.protein}g protein, ${r.carbs}g karbo, ${r.fat}g lemak)`,
+      `- ${title}`,
+      ...r.items.slice(1).map(i => `- ${i}`),
+    ];
+    return lines.join('\n');
+  });
+  const planText = [header, '', targetLine, '', ...mealBlocks].join('\n\n');
+  return { planText, recipes: picked, coverage };
+}
+
+// Recent recipe ids used by a user (last N days) — for no-repeat rule
+export async function getRecentRecipeIds(userId: number, days = 7): Promise<number[]> {
+  const { rows } = await pool.query(
+    `SELECT meals_json FROM meal_plan_history
+     WHERE user_id = $1
+       AND (created_at AT TIME ZONE 'Asia/Jakarta')::date >=
+           ((NOW() AT TIME ZONE 'Asia/Jakarta')::date - $2)`,
+    [userId, days]
+  );
+  const names: string[] = [];
+  for (const r of rows) {
+    const meals = Array.isArray(r.meals_json) ? r.meals_json : (r.meals_json ? JSON.parse(r.meals_json) : []);
+    for (const m of meals) {
+      const firstItem = (m.items?.[0] || '').split(':')[0].slice(0, 60);
+      if (firstItem) names.push(`${m.name} — ${firstItem}`);
+    }
+  }
+  if (!names.length) return [];
+  const { rows: recRows } = await pool.query(
+    'SELECT id FROM recipes WHERE name = ANY($1)',
+    [names]
+  );
+  return recRows.map((r: any) => r.id);
+}
+
 export async function saveWhatsAppOTP(phone: string, code: string): Promise<void> {
   await pool.query(
     `INSERT INTO whatsapp_otps (phone, code) VALUES ($1, $2)
