@@ -8,7 +8,7 @@ import {
   createUserProfile, getUserByEmail, getUserById, getUserByTelegramChatId,
   getSubscribedWebUsers, updateUserProfile, linkTelegramAccount, createTelegramLinkToken,
   consumeTelegramLinkToken, savePlanHistory, getPlanHistory,
-  markCooked, getWebUserStreak,
+  markCooked, getWebUserStreak, getWeekCalendar, getBadges,
   saveWhatsAppOTP, verifyWhatsAppOTP,
   getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
   getHealthScore, getAlerts, getTodaySnapshot, getRecentUsers, getPowerUsers, getAtRiskUsers, getFeedbackWall, getPlanQuality, getPushStatus,
@@ -507,6 +507,27 @@ app.get('/api/plans/history', userAuth, async (req: Request, res: Response) => {
     streak = await getWebUserStreak(userId);
   }
   res.json({ plans: history, streak });
+});
+
+// ── Phase 2: calendar + gamification ──
+app.get('/api/calendar', userAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  const weekOffset = Math.max(-12, Math.min(0, Number(req.query.week) || 0));
+  try {
+    const days = await getWeekCalendar(userId, weekOffset);
+    res.json({ days, weekOffset });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/badges', userAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  try {
+    res.json(await getBadges(userId));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post('/api/plans/cooking-steps', userAuth, async (req: Request, res: Response) => {

@@ -20,6 +20,7 @@
     { hash: '#/login', label: 'User Login', loader: () => import('./routes/UserLogin.svelte'), public: true, userAuth: false },
     // User routes — require user auth
     { hash: '#/dashboard', label: 'User Dashboard', loader: () => import('./routes/UserDashboard.svelte'), public: true, userAuth: true },
+    { hash: '#/kalender', label: 'Kalender', loader: () => import('./routes/Kalender.svelte'), public: true, userAuth: true },
     { hash: '#/profile', label: 'Profile', loader: () => import('./routes/Profile.svelte'), public: true, userAuth: true },
     { hash: '#/history', label: 'Plan History', loader: () => import('./routes/PlanHistory.svelte'), public: true, userAuth: true },
     { hash: '#/settings', label: 'Settings', loader: () => import('./routes/Settings.svelte'), public: true, userAuth: true },

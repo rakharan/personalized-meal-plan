@@ -973,13 +973,107 @@ export async function getWebUserStreak(userId: number): Promise<number> {
     const d = new Date(cur.getTime() - i * 86400000);
     const dStr = d.toISOString().slice(0, 10);
     if (days.includes(dStr)) streak++;
-    else break;
-  }
-  return streak;
-}
+      else break;
+    }
+    return streak;
+    }
+
+    // ── Phase 2: Calendar + Badges (web users) ──
+
+    export interface CalendarDay {
+    date: string;          // YYYY-MM-DD (WIB)
+    dayName: string;       // Sen, Sel, ...
+    dayNum: number;
+    status: 'cooked' | 'skipped' | 'today' | 'future';
+    cuisine: string | null;
+    planId: number | null;
+    }
+
+    export async function getWeekCalendar(userId: number, weekOffset = 0): Promise<CalendarDay[]> {
+    const { rows } = await pool.query(
+      `SELECT
+         d::date::text AS date,
+         to_char(d::date, 'Dy') AS dow,
+         EXTRACT(DAY FROM d)::int AS day_num,
+         p.id AS plan_id,
+         p.cuisine,
+         p.cooked_at,
+         (NOW() AT TIME ZONE 'Asia/Jakarta')::date::text AS today
+       FROM generate_series(
+         ((NOW() AT TIME ZONE 'Asia/Jakarta')::date - ((EXTRACT(ISODOW FROM NOW() AT TIME ZONE 'Asia/Jakarta'))::int - 1)) + ($2 * 7),
+         ((NOW() AT TIME ZONE 'Asia/Jakarta')::date - ((EXTRACT(ISODOW FROM NOW() AT TIME ZONE 'Asia/Jakarta'))::int - 1)) + ($2 * 7) + 6,
+         '1 day'
+       ) d
+       LEFT JOIN LATERAL (
+         SELECT id, cuisine, cooked_at FROM meal_plan_history
+         WHERE user_id = $1
+           AND (created_at AT TIME ZONE 'Asia/Jakarta')::date = d::date
+         ORDER BY created_at DESC LIMIT 1
+       ) p ON true
+       ORDER BY d`,
+      [userId, weekOffset]
+    );
+    const dayNames: Record<string, string> = { Mon: 'Sen', Tue: 'Sel', Wed: 'Rab', Thu: 'Kam', Fri: 'Jum', Sat: 'Sab', Sun: 'Min' };
+    return rows.map((r: any) => ({
+      date: r.date,
+      dayName: dayNames[r.dow] || r.dow,
+      dayNum: r.day_num,
+      status: r.cooked_at ? 'cooked'
+        : r.date === r.today ? 'today'
+        : r.date < r.today ? 'skipped'
+        : 'future',
+      cuisine: r.cuisine,
+      planId: r.plan_id,
+    }));
+    }
+
+    export interface Badge {
+    key: string;
+    name: string;
+    desc: string;
+    emoji: string;
+    unlocked: boolean;
+    progress: number;   // 0-1
+    }
+
+    export async function getBadges(userId: number): Promise<{ badges: Badge[]; weekCooked: number; weekTarget: number }> {
+    const [streak, cuisines, proteinDays, week] = await Promise.all([
+      getWebUserStreak(userId),
+      pool.query(
+        `SELECT COUNT(DISTINCT cuisine)::int AS cnt FROM meal_plan_history WHERE user_id = $1 AND cooked_at IS NOT NULL`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM (
+           SELECT DISTINCT (cooked_at AT TIME ZONE 'Asia/Jakarta')::date AS d
+           FROM meal_plan_history
+           WHERE user_id = $1 AND cooked_at IS NOT NULL
+             AND protein_total >= (SELECT COALESCE(target_protein, 100) FROM user_profiles WHERE id = $1)
+         ) t`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS cnt FROM meal_plan_history
+         WHERE user_id = $1 AND cooked_at IS NOT NULL
+           AND (cooked_at AT TIME ZONE 'Asia/Jakarta')::date >=
+               ((NOW() AT TIME ZONE 'Asia/Jakarta')::date - ((EXTRACT(ISODOW FROM NOW() AT TIME ZONE 'Asia/Jakarta'))::int - 1))`,
+        [userId]
+      ),
+    ]);
+    const cuisineCount = cuisines.rows[0]?.cnt ?? 0;
+    const proteinCount = proteinDays.rows[0]?.cnt ?? 0;
+    const weekCooked = week.rows[0]?.cnt ?? 0;
+    const badges: Badge[] = [
+      { key: 'chef_pemula', name: 'Chef Pemula', desc: 'Masak 3 hari berturut', emoji: '🍳', unlocked: streak >= 3, progress: Math.min(streak / 3, 1) },
+      { key: 'food_explorer', name: 'Food Explorer', desc: 'Coba 5 masakan berbeda', emoji: '🌏', unlocked: cuisineCount >= 5, progress: Math.min(cuisineCount / 5, 1) },
+      { key: 'protein_master', name: 'Protein Master', desc: 'Capai target protein 7 hari', emoji: '💪', unlocked: proteinCount >= 7, progress: Math.min(proteinCount / 7, 1) },
+      { key: 'saji_legend', name: 'Saji Legend', desc: '30 hari streak', emoji: '👑', unlocked: streak >= 30, progress: Math.min(streak / 30, 1) },
+    ];
+    return { badges, weekCooked, weekTarget: 7 };
+    }
 
 
-// ── WhatsApp OTP ──
+    // ── WhatsApp OTP ──
 export async function saveWhatsAppOTP(phone: string, code: string): Promise<void> {
   await pool.query(
     `INSERT INTO whatsapp_otps (phone, code) VALUES ($1, $2)

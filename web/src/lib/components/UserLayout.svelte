@@ -16,6 +16,7 @@
 
   const navItems = [
     { href: '#/dashboard', label: 'Dasbor' },
+    { href: '#/kalender', label: 'Kalender' },
     { href: '#/profile', label: 'Profil' },
     { href: '#/history', label: 'Riwayat' },
     { href: '#/settings', label: 'Pengaturan' },
