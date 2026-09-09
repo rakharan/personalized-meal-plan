@@ -473,6 +473,25 @@ export async function saveBotPlan(chatId: number, planText: string, cuisine: str
     'INSERT INTO bot_plan_history (chat_id, plan_text, cuisine, meals_json) VALUES ($1, $2, $3, $4) RETURNING id',
     [chatId, planText, cuisine, mealsJson]
   );
+  // Mirror to meal_plan_history when chat is TG-linked to a web user
+  const { rows: linked } = await pool.query(
+    'SELECT id FROM user_profiles WHERE telegram_chat_id = $1',
+    [chatId]
+  );
+  if (linked.length) {
+    const userId = linked[0].id;
+    const { rows: prof } = await pool.query(
+      'SELECT target_calories, target_protein FROM user_profiles WHERE id = $1',
+      [userId]
+    );
+    const meals = mealsJson ? JSON.parse(mealsJson) : [];
+    const totKcal = meals.reduce((s: number, m: any) => s + (m.kcal || 0), 0);
+    const totProtein = meals.reduce((s: number, m: any) => s + (m.protein || 0), 0);
+    await pool.query(
+      'INSERT INTO meal_plan_history (user_id, plan_text, meals_json, cuisine, calories_total, protein_total) VALUES ($1, $2, $3, $4, $5, $6)',
+      [userId, planText, mealsJson, cuisine, totKcal || prof[0]?.target_calories || null, totProtein || prof[0]?.target_protein || null]
+    );
+  }
   return rows[0].id;
 }
 
@@ -956,10 +975,22 @@ export function parsePlanMeals(text: string): ParsedMeal[] {
 
 export async function savePlanHistory(userId: number, planText: string, cuisine: string | null, calories: number | null, protein: number | null): Promise<number> {
   const meals = parsePlanMeals(planText);
+  const mealsJson = JSON.stringify(meals);
   const { rows } = await pool.query(
     'INSERT INTO meal_plan_history (user_id, plan_text, meals_json, cuisine, calories_total, protein_total) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-    [userId, planText, JSON.stringify(meals), cuisine, calories, protein]
+    [userId, planText, mealsJson, cuisine, calories, protein]
   );
+  // Mirror to bot_plan_history when web user is TG-linked (keeps bot /today in sync)
+  const { rows: prof } = await pool.query(
+    'SELECT telegram_chat_id FROM user_profiles WHERE id = $1',
+    [userId]
+  );
+  if (prof[0]?.telegram_chat_id) {
+    await pool.query(
+      'INSERT INTO bot_plan_history (chat_id, plan_text, cuisine, meals_json) VALUES ($1, $2, $3, $4)',
+      [prof[0].telegram_chat_id, planText, cuisine, mealsJson]
+    );
+  }
   return rows[0].id;
 }
 
