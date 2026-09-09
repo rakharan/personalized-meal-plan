@@ -144,6 +144,16 @@
             <span class="snapshot-value">{dash.today.newUsersToday}</span>
             <span class="snapshot-label">User baru</span>
           </div>
+          <div class="snapshot-card" class:success={dash.today.cookedToday > 0}>
+            <span class="snapshot-emoji">🔥</span>
+            <span class="snapshot-value">{dash.today.cookedToday ?? 0}</span>
+            <span class="snapshot-label">Sudah masak</span>
+          </div>
+          <div class="snapshot-card">
+            <span class="snapshot-emoji">📋</span>
+            <span class="snapshot-value">{dash.today.plannedTodayWeb ?? 0}</span>
+            <span class="snapshot-label">Plan web hari ini</span>
+          </div>
         </div>
       </section>
     {/if}
@@ -602,6 +612,7 @@
     padding: var(--space-3); background: var(--surface-2); border-radius: var(--radius-md);
   }
   .snapshot-card.danger { background: var(--danger-soft); }
+  .snapshot-card.success { background: var(--primary-soft); }
   .snapshot-emoji { font-size: var(--fs-lg); }
   .snapshot-value { font-size: var(--fs-2xl); font-weight: var(--fw-bold); color: var(--text); font-variant-numeric: tabular-nums; }
   .snapshot-label { font-size: 0.6rem; color: var(--text-subtle); text-transform: uppercase; letter-spacing: var(--ls-wide); }

@@ -1405,6 +1405,20 @@ export async function getAlerts(): Promise<{ severity: string; message: string }
     alerts.push({ severity: 'danger', message: `DAU turun ${Math.round((1 - recent3 / first3) * 100)}% minggu ini` });
   }
 
+  // Cook rate — web users planned but didn't cook
+  const { rows: cookRows } = await pool.query(`
+    SELECT
+      COUNT(*)::int AS planned,
+      COUNT(cooked_at)::int AS cooked
+    FROM meal_plan_history
+    WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+  `);
+  const planned = cookRows[0]?.planned ?? 0;
+  const cooked = cookRows[0]?.cooked ?? 0;
+  if (planned > 10 && cooked / planned < 0.3) {
+    alerts.push({ severity: 'warning', message: `Cook rate ${Math.round((cooked / planned) * 100)}% minggu ini — user generate tapi nggak masak` });
+  }
+
   // No alerts = all good
   if (alerts.length === 0) {
     alerts.push({ severity: 'ok', message: 'Semua metrik dalam batas normal' });
@@ -1414,16 +1428,27 @@ export async function getAlerts(): Promise<{ severity: string; message: string }
 }
 
 // Today snapshot — real-time numbers for today
-export async function getTodaySnapshot(): Promise<{ plansToday: number; activeToday: number; pushesSent: number; pushesFailed: number; newUsersToday: number }> {
+export async function getTodaySnapshot(): Promise<{ plansToday: number; activeToday: number; pushesSent: number; pushesFailed: number; newUsersToday: number; cookedToday: number; plannedTodayWeb: number }> {
   const { rows } = await pool.query(`
     SELECT
       (SELECT COUNT(*)::int FROM usage_log WHERE feature = 'mealplan' AND created >= CURRENT_DATE) AS plans_today,
       (SELECT COUNT(DISTINCT chat_id)::int FROM usage_log WHERE created >= CURRENT_DATE) AS active_today,
       (SELECT COUNT(*)::int FROM push_log WHERE status = 'sent' AND created_at >= CURRENT_DATE) AS pushes_sent,
       (SELECT COUNT(*)::int FROM push_log WHERE status = 'failed' AND created_at >= CURRENT_DATE) AS pushes_failed,
-      (SELECT COUNT(*)::int FROM subscribers WHERE created_at >= CURRENT_DATE) AS new_users_today
+      (SELECT COUNT(*)::int FROM subscribers WHERE created_at >= CURRENT_DATE) AS new_users_today,
+      (SELECT COUNT(*)::int FROM meal_plan_history WHERE (cooked_at AT TIME ZONE 'Asia/Jakarta')::date = (NOW() AT TIME ZONE 'Asia/Jakarta')::date) AS cooked_today,
+      (SELECT COUNT(*)::int FROM meal_plan_history WHERE (created_at AT TIME ZONE 'Asia/Jakarta')::date = (NOW() AT TIME ZONE 'Asia/Jakarta')::date) AS planned_today_web
   `);
-  return rows[0];
+  const r = rows[0];
+  return {
+    plansToday: r.plans_today,
+    activeToday: r.active_today,
+    pushesSent: r.pushes_sent,
+    pushesFailed: r.pushes_failed,
+    newUsersToday: r.new_users_today,
+    cookedToday: r.cooked_today,
+    plannedTodayWeb: r.planned_today_web,
+  };
 }
 
 // Recent users — last N signups

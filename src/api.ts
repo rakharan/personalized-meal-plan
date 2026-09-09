@@ -756,7 +756,15 @@ app.get('/api/dashboard', authCheck, async (_req: Request, res: Response) => {
     res.json({
       health,
       alerts,
-      today,
+      today: today ? {
+        plansToday: today.plansToday,
+        activeToday: today.activeToday,
+        pushesSent: today.pushesSent,
+        pushesFailed: today.pushesFailed,
+        newUsersToday: today.newUsersToday,
+        cookedToday: today.cookedToday,
+        plannedTodayWeb: today.plannedTodayWeb,
+      } : null,
       recentUsers,
       powerUsers,
       atRiskUsers,
