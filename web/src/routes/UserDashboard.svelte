@@ -24,6 +24,7 @@
   let groceryWeek = $state('');
   let remixText = $state('');
   let remixLoading = $state(false);
+  let remixInput = $state('');
 
   const isPro = $derived(profile?.tier === 'premium');
 
@@ -150,12 +151,14 @@
   }
 
   async function getRemix() {
+    if (!remixInput.trim()) return;
     remixLoading = true;
     error = '';
     try {
       const res = await fetch('/api/plans/leftover-remix', {
         method: 'POST',
-        headers: auth.authHeaders(),
+        headers: { 'Content-Type': 'application/json', ...auth.authHeaders() },
+        body: JSON.stringify({ leftovers: remixInput.trim() }),
       });
       if (!res.ok) {
         const d = await res.json();
@@ -356,9 +359,18 @@
               🛒 Belanja
             </Button>
             {#if isPro}
-              <Button variant="secondary" loading={remixLoading} onclick={getRemix}>
-                ♻️ Sisa Kemarin
-              </Button>
+              <div class="remix-row">
+                <input
+                  class="remix-input"
+                  type="text"
+                  placeholder="Sisa: ayam 2 potong, nasi 1 mangkuk..."
+                  bind:value={remixInput}
+                  onkeydown={(e) => e.key === 'Enter' && getRemix()}
+                />
+                <Button variant="secondary" loading={remixLoading} onclick={getRemix} disabled={!remixInput.trim()}>
+                  ♻️ Remix
+                </Button>
+              </div>
             {/if}
           </div>
         </div>
@@ -565,6 +577,14 @@
     color: var(--primary); font-variant-numeric: tabular-nums;
   }
   .footer-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+  .remix-row { display: flex; gap: var(--space-2); flex: 1; min-width: 240px; }
+  .remix-input {
+    flex: 1; padding: var(--space-2) var(--space-3);
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text);
+    font-size: var(--fs-sm); font-family: inherit; min-height: 44px;
+  }
+  .remix-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
 
   /* Regenerate — subtle escape valve */
   .regen-row { text-align: center; margin: var(--space-2) 0 var(--space-5); }

@@ -659,13 +659,12 @@ app.post('/api/plans/leftover-remix', userAuth, async (req: Request, res: Respon
   const user = await getUserById(userId);
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
   if (user.tier !== 'premium') { res.status(403).json({ error: 'Fitur Pro — upgrade dulu ya' }); return; }
+  const leftovers = sanitizeText(String(req.body?.leftovers || ''), 500);
+  if (!leftovers) { res.status(400).json({ error: 'Sebutkan bahan yang sisa dulu ya' }); return; }
   try {
-    const yesterday = await getYesterdayPlanText(userId);
-    if (!yesterday) {
-      res.status(400).json({ error: 'Kemarin nggak ada rencana. Masak dulu hari ini.' });
-      return;
-    }
-    const remix = await generateLeftoverRemix(yesterday, user.locale as 'en' | 'id');
+    // Yesterday's plan as context only (allergies, skill) — leftovers are the source of truth
+    const context = (await getYesterdayPlanText(userId)) || '';
+    const remix = await generateLeftoverRemix(leftovers, context, user.locale as 'en' | 'id');
     res.json({ remix });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

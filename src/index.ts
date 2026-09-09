@@ -44,6 +44,7 @@ interface SessionState {
     awaitingFreeText?: string;
     awaitingTime?: boolean;
     awaitingPlanName?: boolean;
+    awaitingLeftovers?: boolean;
     editingField?: string;
     lastPlanText?: string;
     lastBotPlanId?: number;
@@ -1180,21 +1181,11 @@ bot.on('callback_query', async (ctx: any) => {
                     : 'Pro feature! Upgrade on the web (Pro menu) for leftover remix.');
                 return;
             }
-            await ctx.reply(locale === 'id' ? '♻️ Lagi mikirin remix dari sisa kemarin...' : '♻️ Thinking up remixes from yesterday...');
-            try {
-                const yesterday = await getYesterdayPlanText(webProfile.id);
-                if (!yesterday) {
-                    await ctx.reply(locale === 'id'
-                        ? 'Kemarin nggak ada rencana. Masak dulu hari ini, besok baru bisa remix.'
-                        : 'No plan yesterday. Cook today first, remix tomorrow.');
-                    return;
-                }
-                const remix = await generateLeftoverRemix(yesterday, locale, chatId);
-                await sendLong((txt) => ctx.reply(txt), remix);
-            } catch (err: any) {
-                console.error('Remix action failed:', err);
-                await ctx.reply(t(locale, 'err', err.message));
-            }
+            // Ask user what's actually left — plan is only context, not source of truth
+            ctx.session.awaitingLeftovers = true;
+            await ctx.reply(locale === 'id'
+                ? 'Bahan apa yang sisa? Contoh: ayam bakar 2 potong, nasi 1 mangkuk, kangkung setengah ikat'
+                : 'What\'s left? E.g.: grilled chicken 2 pieces, rice 1 bowl, spinach half bunch');
             return;
         }
         if (action === 'shop' || action === 'macros' || action === 'cook') {
@@ -1342,6 +1333,29 @@ bot.on('text', async (ctx: any) => {
         session.step = 'idle';
         await ctx.reply(t(locale, 'settime_set', pad2(h), pad2(min)));
         ctx.session = session;
+        return;
+    }
+
+    // ── Awaiting leftovers for remix ──
+    if (session.awaitingLeftovers) {
+        const leftovers = sanitizeText(ctx.message.text, 500);
+        if (!leftovers) {
+            await ctx.reply(t(locale, 'invalid_input'));
+            ctx.session = session;
+            return;
+        }
+        delete session.awaitingLeftovers;
+        ctx.session = session;
+        await ctx.reply(locale === 'id' ? '♻️ Lagi mikirin remix...' : '♻️ Thinking up remixes...');
+        try {
+            const webProfile = await getUserByTelegramChatId(ctx.chat.id);
+            const context = webProfile ? ((await getYesterdayPlanText(webProfile.id)) || '') : '';
+            const remix = await generateLeftoverRemix(leftovers, context, locale, ctx.chat.id);
+            await sendLong((txt) => ctx.reply(txt), remix);
+        } catch (err: any) {
+            console.error('Remix failed:', err);
+            await ctx.reply(t(locale, 'err', err.message));
+        }
         return;
     }
 

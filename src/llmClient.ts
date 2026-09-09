@@ -283,11 +283,14 @@ export async function generateCookingSteps(planText: string, locale: 'en' | 'id'
   return result.content;
 }
 
-export async function generateLeftoverRemix(yesterdayPlan: string, locale: 'en' | 'id' = 'en', chatId?: number): Promise<string> {
+export async function generateLeftoverRemix(leftovers: string, context: string, locale: 'en' | 'id' = 'en', chatId?: number): Promise<string> {
   const sys = locale === 'id'
-    ? 'Koki kreatif. Dari rencana kemarin, identifikasi bahan yang tersisa. Untuk tiap saran meal: nama meal, bahan sisa yang dipakai, bahan tambahan (jika ada), estimasi kkal+protein. Maksimal 3 saran. Bahasa Indonesia santai, ringkas, tanpa preamble, tanpa markdown.'
-    : 'Creative cook. From yesterday\'s plan, identify leftover ingredients. For each meal suggestion: meal name, leftover ingredients used, extra ingredients (if any), kkal+protein estimate. Max 3 suggestions. Concise, no preamble, no markdown.';
-  const result = await callLLM(sys, yesterdayPlan, { temperature: 0.7, maxTokens: 2048, model: MODEL_STRUCTURED });
+    ? 'Koki kreatif. Dari bahan sisa yang disebutkan user, buat 2-3 saran meal baru. Untuk tiap saran: nama meal, bahan sisa yang dipakai, bahan tambahan (jika ada, harus umum di Indonesia), estimasi kkal+protein. Bahasa Indonesia santai, ringkas, tanpa preamble, tanpa markdown.'
+    : 'Creative cook. From the leftover ingredients the user lists, create 2-3 meal suggestions. For each: meal name, leftovers used, extra ingredients (if any, must be common in Indonesia), kkal+protein estimate. Concise, no preamble, no markdown.';
+  const user = context
+    ? `Sisa bahan: ${leftovers}\n\nKonteks (rencana kemarin, untuk alergi/skill):\n${context}`
+    : `Sisa bahan: ${leftovers}`;
+  const result = await callLLM(sys, user, { temperature: 0.7, maxTokens: 2048, model: MODEL_STRUCTURED });
   await logUsageSafe(chatId, result.usage, 'remix');
   return result.content;
 }
