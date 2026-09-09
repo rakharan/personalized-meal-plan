@@ -1306,7 +1306,11 @@ export async function queryRecipes(q: RecipeQuery): Promise<Recipe[]> {
   }
   const { rows } = await pool.query(
     `SELECT * FROM recipes WHERE ${conditions.join(' AND ')}
-     ORDER BY times_used ASC, last_used_at ASC NULLS FIRST, rating_count DESC
+     ORDER BY
+       CASE WHEN rating_count >= 3 AND rating_sum::float / rating_count < 0 THEN 1 ELSE 0 END ASC,
+       times_used ASC,
+       last_used_at ASC NULLS FIRST,
+       rating_sum DESC
      LIMIT 100`,
     params
   );
@@ -1332,6 +1336,19 @@ export async function rateRecipes(ids: number[], good: boolean): Promise<void> {
     `UPDATE recipes SET rating_sum = rating_sum + $1, rating_count = rating_count + 1 WHERE id = ANY($2)`,
     [good ? 1 : -1, ids]
   );
+}
+
+// Match recipes in a plan text back to recipe rows (same naming as seedRecipesFromPlan)
+export async function getRecipeIdsFromPlan(planText: string): Promise<number[]> {
+  const meals = parsePlanMeals(planText);
+  const names: string[] = [];
+  for (const m of meals) {
+    const firstItem = (m.items[0] || '').split(':')[0].slice(0, 60);
+    names.push(firstItem ? `${m.name} — ${firstItem}` : m.name);
+  }
+  if (!names.length) return [];
+  const { rows } = await pool.query('SELECT id FROM recipes WHERE name = ANY($1)', [names]);
+  return rows.map((r: any) => r.id);
 }
 
 // Seed from a parsed plan (all meals → recipe rows)

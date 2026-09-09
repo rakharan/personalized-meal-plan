@@ -16,6 +16,7 @@ import {
     saveBotPlan, getBotPlanHistory, getBotPlanByDate, updateBotPlanMeals,
     logPush, parsePlanMeals,
     markCooked, getWebUserStreak, getYesterdayPlanText,
+    rateRecipes, getRecipeIdsFromPlan,
 } from './store.js';
 import type { Answers, User, ParsedMeal } from './store.js';
 import {
@@ -1117,11 +1118,27 @@ bot.on('callback_query', async (ctx: any) => {
         }
         if (action === 'good') {
             await setLastFeedback(chatId, 'good');
+            // Rate recipes used in today's plan
+            const planText = ctx.session?.lastPlanText
+                ?? (await getBotPlanByDate(chatId, new Date().toISOString().slice(0, 10)))?.plan_text;
+            if (planText) {
+                getRecipeIdsFromPlan(planText)
+                    .then(ids => rateRecipes(ids, true))
+                    .catch(() => {});
+            }
             await ctx.reply(locale === 'id' ? '👍 Makasih! Senang kamu suka!' : '👍 Thanks! Glad you liked it!');
             return;
         }
         if (action === 'bad') {
             await setLastFeedback(chatId, 'bad');
+            // Down-rate recipes used in today's plan
+            const planText = ctx.session?.lastPlanText
+                ?? (await getBotPlanByDate(chatId, new Date().toISOString().slice(0, 10)))?.plan_text;
+            if (planText) {
+                getRecipeIdsFromPlan(planText)
+                    .then(ids => rateRecipes(ids, false))
+                    .catch(() => {});
+            }
             const last = user?.lastAnswers;
             if (!last) {
                 await ctx.reply(t(locale, 'need_mealplan'));
