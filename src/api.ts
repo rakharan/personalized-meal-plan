@@ -496,7 +496,16 @@ app.post('/api/plans/generate', userAuth, async (req: Request, res: Response) =>
 app.get('/api/plans/history', userAuth, async (req: Request, res: Response) => {
   const userId = (req as any).userId;
   const history = await getPlanHistory(userId);
-  const streak = await getWebUserStreak(userId);
+  const user = await getUserById(userId);
+  // Streak source: bot (subscribers.streak) when TG-linked, else web cooked streak
+  let streak = 0;
+  if (user?.telegram_chat_id) {
+    const { rows } = await pool.query('SELECT streak FROM subscribers WHERE chat_id = $1', [user.telegram_chat_id]);
+    streak = rows[0]?.streak ?? 0;
+  }
+  if (streak === 0) {
+    streak = await getWebUserStreak(userId);
+  }
   res.json({ plans: history, streak });
 });
 
@@ -579,8 +588,20 @@ app.post('/api/plans/cook', userAuth, async (req: Request, res: Response) => {
   try {
     const cooked = await markCooked(userId, Number.isFinite(planId) ? planId : null);
     if (!cooked) { res.status(400).json({ error: 'Belum ada rencana makan. Generate dulu ya!' }); return; }
+    // If TG-linked, bump bot streak once per day too (keeps both sides consistent)
+    const user = await getUserById(userId);
+    if (user?.telegram_chat_id) {
+      const todayWib = (await pool.query(`SELECT to_char(NOW() AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD') AS d`)).rows[0].d;
+      const { rows } = await pool.query('SELECT streak, last_pushed FROM subscribers WHERE chat_id = $1', [user.telegram_chat_id]);
+      if (rows.length && rows[0].last_pushed !== todayWib) {
+        await pool.query('UPDATE subscribers SET streak = streak + 1, last_pushed = $1 WHERE chat_id = $2', [todayWib, user.telegram_chat_id]);
+      }
+    }
     const streak = await getWebUserStreak(userId);
-    res.json({ cooked: true, planId: cooked, streak });
+    const { rows: sr } = user?.telegram_chat_id
+      ? await pool.query('SELECT streak FROM subscribers WHERE chat_id = $1', [user.telegram_chat_id])
+      : { rows: [] };
+    res.json({ cooked: true, planId: cooked, streak: Math.max(sr[0]?.streak ?? 0, streak) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
