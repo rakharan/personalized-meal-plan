@@ -5,6 +5,8 @@ const MODEL = process.env.LLM_MODEL || 'hermes';
 const API_KEY = process.env.LLM_API_KEY || 'not-needed';
 const MAX_RETRIES = Number(process.env.LLM_MAX_RETRIES ?? 3);
 const RETRY_DELAY_MS = Number(process.env.LLM_RETRY_DELAY_MS ?? 2000);
+// Structured-output tasks (lists, remix) — cheap+fast non-reasoning model
+const MODEL_STRUCTURED = process.env.LLM_MODEL_STRUCTURED || 'prod/glm-5.1';
 
 export interface MealPlanOptions {
   locale?: 'en' | 'id';
@@ -122,8 +124,9 @@ function parseResponse(raw: string): { data: any; content: string } | null {
 async function callLLM(
   systemContent: string,
   userContent: string,
-  { temperature = 0.6, maxTokens = 8192 }: { temperature?: number; maxTokens?: number } = {},
+  { temperature = 0.6, maxTokens = 8192, model }: { temperature?: number; maxTokens?: number; model?: string } = {},
 ): Promise<LLMResult> {
+  const useModel = model || MODEL;
   let lastErr: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -132,10 +135,10 @@ async function callLLM(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${API_KEY}`,
+          Authorization: 'Bearer ' + API_KEY,
         },
         body: JSON.stringify({
-          model: MODEL,
+          model: useModel,
           temperature,
           max_tokens: maxTokens,
           thinking: false,
@@ -179,7 +182,7 @@ async function callLLM(
     try {
       const res = await fetch(`${BASE_URL}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${API_KEY}` },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + API_KEY },
         body: JSON.stringify({
           model: fallbackModel,
           temperature,
@@ -255,9 +258,9 @@ export async function generateWeeklyPlan(
 
 export async function generateShoppingList(planText: string, locale: 'en' | 'id' = 'en', chatId?: number): Promise<string> {
   const sys = locale === 'id'
-    ? 'Asisten belanja. Ekstrak daftar belanja dari rencana makan: bahan + jumlah. Kelompokkan (Protein, Sayur, Lainnya). Tanpa disclaimer.'
-    : 'Shopping assistant. Extract shopping list from meal plan: ingredient + quantity. Group by category (Protein, Produce, Other). No disclaimers.';
-  const result = await callLLM(sys, planText, { temperature: 0.3, maxTokens: 4096 });
+    ? 'Asisten belanja. Ekstrak daftar belanja dari rencana makan: bahan + jumlah. Kelompokkan ke kategori: Protein, Sayur, Karbo, Bumbu, Buah, Lainnya. Output HANYA daftar, tanpa preamble, tanpa markdown.'
+    : 'Shopping assistant. Extract shopping list from meal plan: ingredient + quantity. Group into categories: Protein, Produce, Carbs, Spices, Fruit, Other. Output ONLY the list, no preamble, no markdown.';
+  const result = await callLLM(sys, planText, { temperature: 0.3, maxTokens: 4096, model: MODEL_STRUCTURED });
   await logUsageSafe(chatId, result.usage, 'shopping');
   return result.content;
 }
@@ -282,9 +285,9 @@ export async function generateCookingSteps(planText: string, locale: 'en' | 'id'
 
 export async function generateLeftoverRemix(yesterdayPlan: string, locale: 'en' | 'id' = 'en', chatId?: number): Promise<string> {
   const sys = locale === 'id'
-    ? `Koki kreatif. Dari rencana kemarin, identifikasi bahan/sisa yang bisa dipakai lagi. Sarankan 2-3 meal baru dari sisa tersebut (contoh: ayam bakar → ayam suwir). Sertakan estimasi kalori+protein. Bahasa Indonesia, ringkas, tanpa disclaimer.`
-    : `Creative cook. From yesterday's plan, identify leftovers/ingredients to reuse. Suggest 2-3 new meals from them (e.g., grilled chicken → shredded chicken). Include calorie+protein estimate. Concise, no disclaimers.`;
-  const result = await callLLM(sys, yesterdayPlan, { temperature: 0.7, maxTokens: 2048 });
+    ? 'Koki kreatif. Dari rencana kemarin, identifikasi bahan yang tersisa. Untuk tiap saran meal: nama meal, bahan sisa yang dipakai, bahan tambahan (jika ada), estimasi kkal+protein. Maksimal 3 saran. Bahasa Indonesia santai, ringkas, tanpa preamble, tanpa markdown.'
+    : 'Creative cook. From yesterday\'s plan, identify leftover ingredients. For each meal suggestion: meal name, leftover ingredients used, extra ingredients (if any), kkal+protein estimate. Max 3 suggestions. Concise, no preamble, no markdown.';
+  const result = await callLLM(sys, yesterdayPlan, { temperature: 0.7, maxTokens: 2048, model: MODEL_STRUCTURED });
   await logUsageSafe(chatId, result.usage, 'remix');
   return result.content;
 }
