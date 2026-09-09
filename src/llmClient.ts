@@ -71,6 +71,9 @@ function buildUserPrompt(answers: Record<string, any>, opts: MealPlanOptions = {
     `Meals/day: ${mealsPerDay}`,
     `Cuisine: ${cuisine || 'any'}`,
   ];
+  if (answers.kidFriendly) lines.push(`Kid-friendly: ${answers.kidFriendly}`);
+  if (answers.quickMeals) lines.push(`Quick meals: ${answers.quickMeals}`);
+  if (answers.budgetWeekly) lines.push(`Budget: ${answers.budgetWeekly} — prioritize cheap local ingredients`);
   if (opts.profileContext) {
     const p = opts.profileContext;
     if (p.age) lines.push(`Age: ${p.age}`);
@@ -274,6 +277,15 @@ export async function generateCookingSteps(planText: string, locale: 'en' | 'id'
     : `Practical cook. Create cooking instructions per meal: 🍳 Utensils, 📝 Steps (numbered), 🍽️ Serving. Plain text, short lines.`;
   const result = await callLLM(sys, planText, { temperature: 0.4, maxTokens: 4096 });
   await logUsageSafe(chatId, result.usage, 'cooking');
+  return result.content;
+}
+
+export async function generateLeftoverRemix(yesterdayPlan: string, locale: 'en' | 'id' = 'en', chatId?: number): Promise<string> {
+  const sys = locale === 'id'
+    ? `Koki kreatif. Dari rencana kemarin, identifikasi bahan/sisa yang bisa dipakai lagi. Sarankan 2-3 meal baru dari sisa tersebut (contoh: ayam bakar → ayam suwir). Sertakan estimasi kalori+protein. Bahasa Indonesia, ringkas, tanpa disclaimer.`
+    : `Creative cook. From yesterday's plan, identify leftovers/ingredients to reuse. Suggest 2-3 new meals from them (e.g., grilled chicken → shredded chicken). Include calorie+protein estimate. Concise, no disclaimers.`;
+  const result = await callLLM(sys, yesterdayPlan, { temperature: 0.7, maxTokens: 2048 });
+  await logUsageSafe(chatId, result.usage, 'remix');
   return result.content;
 }
 

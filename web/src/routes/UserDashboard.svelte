@@ -19,6 +19,13 @@
   let error = $state('');
   let loading = $state(true);
   let streak = $state(0);
+  let groceryList = $state('');
+  let groceryLoading = $state(false);
+  let groceryWeek = $state('');
+  let remixText = $state('');
+  let remixLoading = $state(false);
+
+  const isPro = $derived(profile?.tier === 'premium');
 
   async function loadProfile() {
     loading = true;
@@ -117,6 +124,49 @@
       error = e.message;
     } finally {
       cookingLoading = false;
+    }
+  }
+
+  async function getGroceryList() {
+    groceryLoading = true;
+    error = '';
+    try {
+      const res = await fetch('/api/plans/grocery-list', {
+        method: 'POST',
+        headers: auth.authHeaders(),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Gagal ambil daftar belanja');
+      }
+      const data = await res.json();
+      groceryList = data.list;
+      groceryWeek = data.week;
+    } catch (e: any) {
+      error = e.message;
+    } finally {
+      groceryLoading = false;
+    }
+  }
+
+  async function getRemix() {
+    remixLoading = true;
+    error = '';
+    try {
+      const res = await fetch('/api/plans/leftover-remix', {
+        method: 'POST',
+        headers: auth.authHeaders(),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Gagal ambil remix');
+      }
+      const data = await res.json();
+      remixText = data.remix;
+    } catch (e: any) {
+      error = e.message;
+    } finally {
+      remixLoading = false;
     }
   }
 
@@ -239,6 +289,9 @@
     <div class="welcome-bar">
       <div class="welcome-info">
         <h1>Halo, {profile.full_name?.split(' ')[0] || 'Koki'}! 👋</h1>
+        {#if isPro}
+          <a href="#/pro" class="pro-badge-mini">Pro ✓</a>
+        {/if}
         <p class="welcome-sub">
           {goalLabel(profile.goal)} ·
           <span class="macro-pill">{profile.target_calories || '—'} kal</span> ·
@@ -291,6 +344,14 @@
             <Button variant="secondary" loading={cookingLoading} onclick={getCookingSteps}>
               🍳 Panduan Masak
             </Button>
+            <Button variant="secondary" loading={groceryLoading} onclick={getGroceryList}>
+              🛒 Belanja
+            </Button>
+            {#if isPro}
+              <Button variant="secondary" loading={remixLoading} onclick={getRemix}>
+                ♻️ Sisa Kemarin
+              </Button>
+            {/if}
           </div>
         </div>
       </section>
@@ -338,6 +399,34 @@
           </div>
         </div>
         <pre class="cooking-text">{cookingSteps}</pre>
+      </section>
+    {/if}
+
+    <!-- ═══ Grocery List ═══ -->
+    {#if groceryList}
+      <section class="cooking-section">
+        <div class="cooking-header" style="background: var(--primary-soft); border-left-color: var(--primary);">
+          <span class="cooking-icon">🛒</span>
+          <div>
+            <h3 style="color: var(--primary);">Daftar Belanja</h3>
+            <span class="cooking-sub">{groceryWeek}</span>
+          </div>
+        </div>
+        <pre class="cooking-text">{groceryList}</pre>
+      </section>
+    {/if}
+
+    <!-- ═══ Leftover Remix ═══ -->
+    {#if remixText}
+      <section class="cooking-section" style="border-left-color: var(--leaf-400);">
+        <div class="cooking-header" style="background: var(--primary-soft);">
+          <span class="cooking-icon">♻️</span>
+          <div>
+            <h3 style="color: var(--leaf-400);">Sisa Kemarin</h3>
+            <span class="cooking-sub">Meal baru dari bahan kemarin</span>
+          </div>
+        </div>
+        <pre class="cooking-text">{remixText}</pre>
       </section>
     {/if}
 
@@ -399,6 +488,14 @@
     padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill);
     font-size: var(--fs-xs); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums;
   }
+  .pro-badge-mini {
+    display: inline-flex; margin-left: var(--space-2);
+    background: linear-gradient(135deg, var(--accent), var(--amber-400));
+    color: var(--brown-900); padding: 2px var(--space-2);
+    border-radius: var(--radius-pill); font-size: var(--fs-xs);
+    font-weight: var(--fw-bold); text-decoration: none; vertical-align: middle;
+  }
+  .pro-badge-mini:hover { filter: brightness(1.1); }
 
   /* ── Today Plan ── */
   .today-plan {

@@ -20,6 +20,7 @@
     { href: '#/profile', label: 'Profil' },
     { href: '#/history', label: 'Riwayat' },
     { href: '#/settings', label: 'Pengaturan' },
+    { href: '#/pro', label: 'Pro' },
   ];
 
   function closeMobileNav() { mobileNavOpen = false; }

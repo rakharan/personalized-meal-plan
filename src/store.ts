@@ -251,6 +251,10 @@ export async function migrateSchema(): Promise<void> {
     ['push_hour', 'INTEGER'],
     ['push_min', 'INTEGER'],
     ['subscribed', 'INTEGER DEFAULT 0'],
+    ['tier', "TEXT NOT NULL DEFAULT 'free'"],
+    ['kid_friendly', 'INTEGER DEFAULT 0'],
+    ['quick_meals', 'INTEGER DEFAULT 0'],
+    ['budget_weekly', 'INTEGER'],
   ];
   for (const [col, def] of profileMigrations) {
     if (!profileCols.has(col)) {
@@ -668,6 +672,10 @@ export interface UserProfile {
   push_hour: number | null;
   push_min: number | null;
   subscribed: boolean;
+  tier: string;
+  kid_friendly: boolean;
+  quick_meals: boolean;
+  budget_weekly: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -702,6 +710,10 @@ interface UserProfileRow {
   push_hour: number | null;
   push_min: number | null;
   subscribed: number;
+  tier: string;
+  kid_friendly: number;
+  quick_meals: number;
+  budget_weekly: number | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -737,6 +749,10 @@ function rowToProfile(row: UserProfileRow): UserProfile {
     push_hour: row.push_hour,
     push_min: row.push_min,
     subscribed: !!row.subscribed,
+    tier: row.tier || 'free',
+    kid_friendly: !!row.kid_friendly,
+    quick_meals: !!row.quick_meals,
+    budget_weekly: row.budget_weekly,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -785,14 +801,15 @@ export async function updateUserProfile(id: number, fields: Record<string, any>)
     'disliked_ingredients', 'delivery_channel', 'whatsapp_phone',
     'whatsapp_verified', 'locale',
     'push_hour', 'push_min', 'subscribed',
+    'kid_friendly', 'quick_meals', 'budget_weekly',
   ];
   const updates: string[] = [];
   const values: any[] = [];
   let idx = 1;
   for (const [key, val] of Object.entries(fields)) {
     if (!allowed.includes(key)) continue;
-    if (key === 'has_children') {
-      updates.push(`has_children = $${idx}`);
+    if (key === 'has_children' || key === 'kid_friendly' || key === 'quick_meals') {
+      updates.push(`${key} = $${idx}`);
       values.push(val ? 1 : 0);
     } else if (key === 'whatsapp_verified' || key === 'subscribed') {
       updates.push(`${key} = $${idx}`);
@@ -811,6 +828,39 @@ export async function updateUserProfile(id: number, fields: Record<string, any>)
 
 export async function linkTelegramAccount(userId: number, chatId: number): Promise<void> {
   await pool.query('UPDATE user_profiles SET telegram_chat_id = $1, updated_at = NOW() WHERE id = $2', [chatId, userId]);
+}
+
+export async function setUserTier(userId: number, tier: 'free' | 'premium'): Promise<void> {
+  await pool.query('UPDATE user_profiles SET tier = $1, updated_at = NOW() WHERE id = $2', [tier, userId]);
+}
+
+// ── Weekly grocery list — last 7 days of plan text for LLM consolidation ──
+export async function getWeekPlanTexts(userId: number): Promise<{ week: string; planTexts: string[] }> {
+  const { rows } = await pool.query(
+    `SELECT plan_text FROM meal_plan_history
+     WHERE user_id = $1
+       AND (created_at AT TIME ZONE 'Asia/Jakarta')::date >=
+           ((NOW() AT TIME ZONE 'Asia/Jakarta')::date - 6)
+     ORDER BY created_at DESC`,
+    [userId]
+  );
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - 6);
+  const week = `${weekStart.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} — ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`;
+  return { week, planTexts: rows.map((r: any) => r.plan_text) };
+}
+
+// ── Leftover remix — yesterday's plan for LLM remix ──
+export async function getYesterdayPlanText(userId: number): Promise<string | null> {
+  const { rows } = await pool.query(
+    `SELECT plan_text FROM meal_plan_history
+     WHERE user_id = $1
+       AND (created_at AT TIME ZONE 'Asia/Jakarta')::date =
+           ((NOW() AT TIME ZONE 'Asia/Jakarta')::date - 1)
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId]
+  );
+  return rows[0]?.plan_text ?? null;
 }
 
 // ── Telegram link tokens ──

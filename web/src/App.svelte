@@ -24,6 +24,7 @@
     { hash: '#/profile', label: 'Profile', loader: () => import('./routes/Profile.svelte'), public: true, userAuth: true },
     { hash: '#/history', label: 'Plan History', loader: () => import('./routes/PlanHistory.svelte'), public: true, userAuth: true },
     { hash: '#/settings', label: 'Settings', loader: () => import('./routes/Settings.svelte'), public: true, userAuth: true },
+    { hash: '#/pro', label: 'Saji Pro', loader: () => import('./routes/Pro.svelte'), public: true, userAuth: true },
     // Admin login — MUST be before #/admin (startsWith match)
     { hash: '#/admin-login', label: 'Admin Login', loader: () => import('./routes/Login.svelte'), public: true, userAuth: false },
     // Admin sub-routes — longest first

@@ -9,6 +9,7 @@ import {
   getSubscribedWebUsers, updateUserProfile, linkTelegramAccount, createTelegramLinkToken,
   consumeTelegramLinkToken, savePlanHistory, getPlanHistory,
   markCooked, getWebUserStreak, getWeekCalendar, getBadges,
+  setUserTier, getWeekPlanTexts, getYesterdayPlanText,
   saveWhatsAppOTP, verifyWhatsAppOTP,
   getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
   getHealthScore, getAlerts, getTodaySnapshot, getRecentUsers, getPowerUsers, getAtRiskUsers, getFeedbackWall, getPlanQuality, getPushStatus,
@@ -18,7 +19,7 @@ import {
   validateEmail, validatePassword, validateAge, validateHeight, validateWeight,
   validateCalories, validateProtein, validatePhone, sanitizeText, calcTDEE, suggestProtein,
 } from './validate.js';
-import { generateMealPlan, generateCookingSteps, regenerateMeal, parseCuisine } from './llmClient.js';
+import { generateMealPlan, generateCookingSteps, regenerateMeal, parseCuisine, generateShoppingList, generateLeftoverRemix } from './llmClient.js';
 import { parsePlanMeals } from './store.js';
 import { createDeliveryManager, deliverPlan } from './delivery.js';
 import type { Request, Response } from 'express';
@@ -335,6 +336,7 @@ app.put('/api/profile', userAuth, async (req: Request, res: Response) => {
     'health_conditions', 'allergies', 'dietary_restrictions', 'goal',
     'target_calories', 'target_protein', 'cuisine_rotation', 'meals_per_day',
     'disliked_ingredients', 'delivery_channel', 'locale',
+    'kid_friendly', 'quick_meals', 'budget_weekly',
   ];
 
   for (const f of fields) {
@@ -470,6 +472,9 @@ app.post('/api/plans/generate', userAuth, async (req: Request, res: Response) =>
       protein: user.target_protein ? String(user.target_protein) : '',
       mealsPerDay: String(user.meals_per_day || 3),
       cuisine: user.cuisine_rotation || 'rotate',
+      kidFriendly: user.kid_friendly ? 'ya — hindari pedas, rasa familiar, bentuk menarik' : '',
+      quickMeals: user.quick_meals ? 'ya — semua meal < 30 menit masak' : '',
+      budgetWeekly: user.budget_weekly ? `Rp${user.budget_weekly.toLocaleString('id-ID')}/minggu` : '',
     };
 
     const plan = await generateMealPlan(answers, {
@@ -626,6 +631,56 @@ app.post('/api/plans/cook', userAuth, async (req: Request, res: Response) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Pro features — grocery list, leftover remix, tier
+// ────────────────────────────────────────────────────────────────────────────
+app.post('/api/plans/grocery-list', userAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  const user = await getUserById(userId);
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+  try {
+    const { week, planTexts } = await getWeekPlanTexts(userId);
+    if (!planTexts.length) {
+      res.status(400).json({ error: 'Belum ada rencana minggu ini. Generate dulu beberapa hari.' });
+      return;
+    }
+    const combined = planTexts.join('\n\n---\n\n');
+    const list = await generateShoppingList(combined, user.locale as 'en' | 'id');
+    res.json({ week, list, daysCovered: planTexts.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/plans/leftover-remix', userAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  const user = await getUserById(userId);
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+  if (user.tier !== 'premium') { res.status(403).json({ error: 'Fitur Pro — upgrade dulu ya' }); return; }
+  try {
+    const yesterday = await getYesterdayPlanText(userId);
+    if (!yesterday) {
+      res.status(400).json({ error: 'Kemarin nggak ada rencana. Masak dulu hari ini.' });
+      return;
+    }
+    const remix = await generateLeftoverRemix(yesterday, user.locale as 'en' | 'id');
+    res.json({ remix });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dev-only tier toggle (real payment later via Midtrans)
+app.post('/api/profile/tier', userAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  const tier = req.body?.tier;
+  if (tier !== 'free' && tier !== 'premium') { res.status(400).json({ error: 'tier harus free atau premium' }); return; }
+  await setUserTier(userId, tier);
+  const user = await getUserById(userId);
+  const { password_hash, ...safe } = user as any;
+  res.json({ user: safe });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

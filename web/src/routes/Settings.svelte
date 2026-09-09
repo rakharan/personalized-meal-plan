@@ -20,6 +20,9 @@
   let waDevCode = $state('');
   let copiedRef = $state('');
   let openSection = $state('channels');
+  let kidFriendly = $state(false);
+  let quickMeals = $state(false);
+  let budgetWeekly = $state('');
 
   async function loadProfile() {
     await auth.fetchMe();
@@ -28,13 +31,16 @@
       pushHour = String(profile.push_hour ?? 8);
       pushMin = String(profile.push_min ?? 0);
       subscribed = !!profile.subscribed;
+      kidFriendly = !!profile.kid_friendly;
+      quickMeals = !!profile.quick_meals;
+      budgetWeekly = profile.budget_weekly ? String(profile.budget_weekly) : '';
     }
   }
 
   async function saveProfile() {
     saving = true; error = '';
     try {
-      const res = await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...auth.authHeaders() }, body: JSON.stringify({ ...profile, push_hour: Number(pushHour), push_min: Number(pushMin), subscribed }) });
+      const res = await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json', ...auth.authHeaders() }, body: JSON.stringify({ ...profile, push_hour: Number(pushHour), push_min: Number(pushMin), subscribed, kid_friendly: kidFriendly, quick_meals: quickMeals, budget_weekly: budgetWeekly ? Number(budgetWeekly) : null }) });
       if (!res.ok) throw new Error('Gagal simpan');
       saved = true; setTimeout(() => saved = false, 3000);
     } catch (e: any) { error = e.message; }
@@ -230,6 +236,51 @@
           </div>
         {/if}
       </div>
+
+      <!-- Home & Family -->
+      <div class="acc-item" class:open={openSection === 'family'}>
+        <button class="acc-header" onclick={() => toggleSection('family')}>
+          <span class="acc-status-dot" class:ok={kidFriendly || quickMeals || !!budgetWeekly}></span>
+          <span class="acc-title">Keluarga & Rumah</span>
+          <span class="acc-chevron">{openSection === 'family' ? '−' : '+'}</span>
+        </button>
+        {#if openSection === 'family'}
+          <div class="acc-body">
+            <div class="toggle-row">
+              <div>
+                <p class="t-label-main">👶 Mode Ramah Anak</p>
+                <p class="t-desc">Semua meal nggak pedas, rasa familiar, bentuk menarik</p>
+              </div>
+              <button class="toggle" class:on={kidFriendly} onclick={() => kidFriendly = !kidFriendly} role="switch" aria-checked={kidFriendly}>
+                <span class="knob"></span>
+              </button>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <p class="t-label-main">⚡ Meal 30 Menit</p>
+                <p class="t-desc">Hanya meal yang masaknya &lt; 30 menit</p>
+              </div>
+              <button class="toggle" class:on={quickMeals} onclick={() => quickMeals = !quickMeals} role="switch" aria-checked={quickMeals}>
+                <span class="knob"></span>
+              </button>
+            </div>
+            <div class="toggle-row" style="align-items: flex-start;">
+              <div style="flex: 1;">
+                <p class="t-label-main">💰 Budget Mingguan</p>
+                <p class="t-desc">Target belanja per minggu (Rp)</p>
+                <input
+                  type="number"
+                  class="budget-input"
+                  placeholder="contoh: 350000"
+                  bind:value={budgetWeekly}
+                  min="0"
+                  step="50000"
+                />
+              </div>
+            </div>
+          </div>
+        {/if}
+      </div>
     </div>
 
     <!-- Sticky save bar -->
@@ -331,6 +382,15 @@
   .toggle.on { background: var(--primary); }
   .knob { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--white); transition: transform var(--duration-micro) var(--ease-standard); }
   .toggle.on .knob { transform: translateX(18px); }
+
+  .budget-input {
+    width: 100%; margin-top: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-md); color: var(--text);
+    font-size: var(--fs-sm); font-family: var(--font-mono);
+  }
+  .budget-input:focus { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
 
   /* Referral */
   .referral-header { border-left: 3px solid var(--accent); }
