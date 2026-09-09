@@ -3,6 +3,7 @@ import { Telegraf, session, Markup } from 'telegraf';
 import {
     generateMealPlan, generateShoppingList, generateMacros, parseCuisine,
     generateWeeklyPlan, generateCookingSteps, setUsageCallback, regenerateMeal,
+    generateLeftoverRemix,
 } from './llmClient.js';
 import {
     saveUser, getUser, ensureUser, setSubscribed, getSubscribedUsers,
@@ -14,6 +15,7 @@ import {
     getUserByTelegramChatId,
     saveBotPlan, getBotPlanHistory, getBotPlanByDate, updateBotPlanMeals,
     logPush, parsePlanMeals,
+    markCooked, getWebUserStreak, getYesterdayPlanText,
 } from './store.js';
 import type { Answers, User, ParsedMeal } from './store.js';
 import {
@@ -348,21 +350,23 @@ function editKeyboard(locale: string, answers: Record<string, string | null>) {
 function planActionKeyboard(locale: string) {
     return Markup.inlineKeyboard([
         [
-            { text: t(locale, 'reroll'), callback_data: 'action_reroll' },
-            { text: t(locale, 'edit_plan'), callback_data: 'action_edit' },
-            { text: t(locale, 'save_plan'), callback_data: 'action_save' },
+            { text: locale === 'id' ? '✓ Sudah masak' : '✓ Cooked', callback_data: 'action_cooked' },
+            { text: t(locale, 'shop'), callback_data: 'action_shop' },
+            { text: locale === 'id' ? '♻️ Sisa Kemarin' : '♻️ Leftovers', callback_data: 'action_remix' },
         ],
         [
-            { text: t(locale, 'shop'), callback_data: 'action_shop' },
+            { text: t(locale, 'reroll'), callback_data: 'action_reroll' },
             { text: t(locale, 'macros'), callback_data: 'action_macros' },
             { text: t(locale, 'cook'), callback_data: 'action_cook' },
         ],
         [
-            { text: t(locale, 'good'), callback_data: 'action_good' },
-            { text: t(locale, 'bad'), callback_data: 'action_bad' },
+            { text: t(locale, 'edit_plan'), callback_data: 'action_edit' },
+            { text: t(locale, 'save_plan'), callback_data: 'action_save' },
+            { text: '🔄 ' + (locale === 'id' ? 'Ganti 1 meal' : 'Replace meal'), callback_data: 'action_regen' },
         ],
         [
-            { text: '🔄 ' + (locale === 'id' ? 'Ganti 1 meal' : 'Replace meal'), callback_data: 'action_regen' },
+            { text: t(locale, 'good'), callback_data: 'action_good' },
+            { text: t(locale, 'bad'), callback_data: 'action_bad' },
         ],
     ]);
 }
@@ -1126,6 +1130,73 @@ bot.on('callback_query', async (ctx: any) => {
             await generateAndSend(ctx, last, { regenerate: true });
             return;
         }
+        if (action === 'cooked') {
+            // Mark today's plan cooked — syncs with web via linked account
+            const webProfile = await getUserByTelegramChatId(chatId);
+            if (!webProfile) {
+                await ctx.reply(locale === 'id'
+                    ? 'Hubungkan akun web dulu ya (Pengaturan di web) biar check-in kesinkron.'
+                    : 'Link your web account first (web Settings) so check-ins sync.');
+                return;
+            }
+            try {
+                const cooked = await markCooked(webProfile.id, null);
+                if (!cooked) {
+                    await ctx.reply(t(locale, 'need_mealplan'));
+                    return;
+                }
+                // Bump bot streak once/day (same rule as web cook endpoint)
+                const today = new Date().toISOString().slice(0, 10);
+                if (user?.lastPushed !== today) {
+                    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                    if (user?.lastPushed !== yesterday) await resetStreak(chatId);
+                    await bumpStreak(chatId);
+                    await setLastPushed(chatId, today);
+                }
+                const webStreak = await getWebUserStreak(webProfile.id);
+                const updated = await getUser(chatId);
+                const streak = Math.max(updated?.streak || 0, webStreak);
+                await ctx.reply(locale === 'id'
+                    ? `✓ Mantap! Sudah masak tercatat.${streak > 0 ? ` 🔥 Day ${streak} streak!` : ''}`
+                    : `✓ Nice! Cooked checked in.${streak > 0 ? ` 🔥 Day ${streak} streak!` : ''}`);
+            } catch (err: any) {
+                console.error('Cooked action failed:', err);
+                await ctx.reply(t(locale, 'err', err.message));
+            }
+            return;
+        }
+        if (action === 'remix') {
+            // Leftover remix — premium only (via linked web profile tier)
+            const webProfile = await getUserByTelegramChatId(chatId);
+            if (!webProfile) {
+                await ctx.reply(locale === 'id'
+                    ? 'Hubungkan akun web dulu ya.'
+                    : 'Link your web account first.');
+                return;
+            }
+            if (webProfile.tier !== 'premium') {
+                await ctx.reply(locale === 'id'
+                    ? 'Fitur Pro nih! Upgrade di web (menu Pro) buat remix sisa kemarin.'
+                    : 'Pro feature! Upgrade on the web (Pro menu) for leftover remix.');
+                return;
+            }
+            await ctx.reply(locale === 'id' ? '♻️ Lagi mikirin remix dari sisa kemarin...' : '♻️ Thinking up remixes from yesterday...');
+            try {
+                const yesterday = await getYesterdayPlanText(webProfile.id);
+                if (!yesterday) {
+                    await ctx.reply(locale === 'id'
+                        ? 'Kemarin nggak ada rencana. Masak dulu hari ini, besok baru bisa remix.'
+                        : 'No plan yesterday. Cook today first, remix tomorrow.');
+                    return;
+                }
+                const remix = await generateLeftoverRemix(yesterday, locale, chatId);
+                await sendLong((txt) => ctx.reply(txt), remix);
+            } catch (err: any) {
+                console.error('Remix action failed:', err);
+                await ctx.reply(t(locale, 'err', err.message));
+            }
+            return;
+        }
         if (action === 'shop' || action === 'macros' || action === 'cook') {
             const last = user?.lastAnswers;
             if (!last) {
@@ -1140,6 +1211,7 @@ bot.on('callback_query', async (ctx: any) => {
                 if (action === 'macros') {
                     // No LLM call — derive from parsed plan meals
                     const planText = ctx.session?.lastPlanText
+                        ?? (await getBotPlanByDate(chatId, new Date().toISOString().slice(0, 10)))?.plan_text
                         ?? await generateMealPlan(last, { locale, avoidCuisines: user?.lastCuisines || [] }, chatId);
                     const meals = parsePlanMeals(planText);
                     const macros = formatMacrosFromPlan(meals, locale);
@@ -1149,8 +1221,9 @@ bot.on('callback_query', async (ctx: any) => {
                         await ctx.reply(t(locale, 'err', 'no meals parsed'));
                     }
                 } else {
-                    // Reuse plan from session if available — avoids a second LLM call
+                    // Reuse plan from session or today's pushed plan — avoids a second LLM call
                     const plan = ctx.session?.lastPlanText
+                        ?? (await getBotPlanByDate(chatId, new Date().toISOString().slice(0, 10)))?.plan_text
                         ?? await generateMealPlan(last, { locale, avoidCuisines: user?.lastCuisines || [] }, chatId);
                     if (action === 'shop') {
                         const shop = await generateShoppingList(plan, locale, chatId);
@@ -1168,7 +1241,8 @@ bot.on('callback_query', async (ctx: any) => {
         }
         if (action === 'regen') {
             // Show inline keyboard with meal names from current plan
-            const planText = ctx.session?.lastPlanText;
+            const planText = ctx.session?.lastPlanText
+                ?? (await getBotPlanByDate(chatId, new Date().toISOString().slice(0, 10)))?.plan_text;
             if (!planText) {
                 await ctx.reply(t(locale, 'need_mealplan'));
                 return;
@@ -1189,12 +1263,13 @@ bot.on('callback_query', async (ctx: any) => {
 
     // ── Per-meal regen ──
     if (data.startsWith('regenmeal_')) {
-        const mealName = data.slice(11);
-        const planText = ctx.session?.lastPlanText;
-        if (!planText) {
-            await ctx.reply(t(locale, 'need_mealplan'));
-            return;
-        }
+            const mealName = data.slice(11);
+            const planText = ctx.session?.lastPlanText
+                ?? (await getBotPlanByDate(ctx.chat.id, new Date().toISOString().slice(0, 10)))?.plan_text;
+            if (!planText) {
+                await ctx.reply(t(locale, 'need_mealplan'));
+                return;
+            }
         const user = await getUser(ctx.chat.id);
         const answers = user?.lastAnswers || ctx.session?.answers || {};
         await ctx.reply(t(locale, 'generating'));
@@ -1447,6 +1522,16 @@ async function pushDailyPlans(): Promise<void> {
             await bumpStreak(sub.chatId);
             await setLastPushed(sub.chatId, today);
             await setLastAnswers(sub.chatId, sub.answers);
+            // Action keyboard — cooked check-in, grocery, remix, etc.
+            try {
+                await bot.telegram.sendMessage(
+                    sub.chatId,
+                    sub.locale === 'id' ? 'Aksi cepat buat plan hari ini:' : 'Quick actions for today\'s plan:',
+                    { reply_markup: planActionKeyboard(sub.locale).reply_markup }
+                );
+            } catch (kbErr) {
+                console.error(`Keyboard send failed for ${sub.chatId}:`, kbErr);
+            }
             const updated = await getUser(sub.chatId);
             const streak = updated?.streak || 0;
             if (streak > 0) {
