@@ -339,6 +339,7 @@ app.put('/api/profile', userAuth, async (req: Request, res: Response) => {
     'target_calories', 'target_protein', 'cuisine_rotation', 'meals_per_day',
     'disliked_ingredients', 'delivery_channel', 'locale',
     'kid_friendly', 'quick_meals', 'budget_weekly',
+    'subscribed', 'push_hour', 'push_min',
   ];
 
   for (const f of fields) {

@@ -48,8 +48,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Center(child: SajiLogoImage(size: 88)),
-                  const SizedBox(height: SajiSpace.s4),
-                  const Center(child: SajiLogo(fontSize: 32)),
                   const SizedBox(height: SajiSpace.s6),
                   Text('Makan enak hari ini.\nTanpa mikir.',
                       style: SajiText.h2, textAlign: TextAlign.center),

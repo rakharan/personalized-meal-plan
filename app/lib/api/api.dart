@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // Saji API client — JWT auth, mirrors web auth.svelte.ts
 class Api {
-  // ponytail: LAN IP of dev machine; add --dart-define=API_URL for other hosts
-  static const baseUrl = String.fromEnvironment('API_URL', defaultValue: 'http://192.168.0.151:3000');
+  // ponytail: ngrok tunnel; add --dart-define=API_URL to override
+  static const baseUrl = String.fromEnvironment('API_URL', defaultValue: 'https://bluegill-topical-humbly.ngrok-free.app');
   static const _tokenKey = 'saji-user-token';
 
   String? _token;
