@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../api/api.dart';
 import '../theme/tokens.dart';
 
 class MacroPill extends StatelessWidget {
@@ -27,6 +29,8 @@ class MealTile extends StatelessWidget {
   final int protein;
   final int carbs;
   final int fat;
+  final String? imagePath;
+  final bool isPro;
 
   const MealTile({
     super.key,
@@ -36,6 +40,8 @@ class MealTile extends StatelessWidget {
     this.protein = 0,
     this.carbs = 0,
     this.fat = 0,
+    this.imagePath,
+    this.isPro = false,
   });
 
   String get _emoji {
@@ -48,34 +54,99 @@ class MealTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: SajiSpace.s3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(_emoji, style: const TextStyle(fontSize: 22)),
-          const SizedBox(width: SajiSpace.s3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name.toUpperCase(), style: SajiText.h3),
-                const SizedBox(height: 2),
-                ...items.take(4).map((i) => Text(i,
-                    style: SajiText.bodySm, maxLines: 1, overflow: TextOverflow.ellipsis)),
-              ],
-            ),
-          ),
-          const SizedBox(width: SajiSpace.s2),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (imagePath != null) _MealPhoto(imagePath: imagePath!, isPro: isPro),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: SajiSpace.s3),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (kcal > 0) MacroPill('$kcal kal', SajiColors.primary),
-              const SizedBox(height: 4),
-              if (protein > 0) MacroPill('${protein}g', SajiColors.accent),
+              Text(_emoji, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: SajiSpace.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name.toUpperCase(), style: SajiText.h3),
+                    const SizedBox(height: 2),
+                    ...items.take(4).map((i) => Text(i,
+                        style: SajiText.bodySm, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: SajiSpace.s2),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (kcal > 0) MacroPill('$kcal kal', SajiColors.primary),
+                  const SizedBox(height: 4),
+                  if (protein > 0) MacroPill('${protein}g', SajiColors.accent),
+                ],
+              ),
             ],
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+// Recipe photo — Pro sharp, free blurred + badge
+class _MealPhoto extends StatelessWidget {
+  final String imagePath;
+  final bool isPro;
+  const _MealPhoto({required this.imagePath, required this.isPro});
+
+  @override
+  Widget build(BuildContext context) {
+    final url = imagePath.startsWith('http') ? imagePath : '${Api.baseUrl}$imagePath';
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: SizedBox(
+        height: 130,
+        width: double.infinity,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (ctx, child, progress) => progress == null
+                  ? child
+                  : Container(color: SajiColors.surface2,
+                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: SajiColors.primary))),
+              errorBuilder: (ctx, err, st) => Container(color: SajiColors.surface2),
+            ),
+            if (!isPro) ...[
+              // Blur + dim overlay for free users
+              BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Container(color: Colors.black.withOpacity(0.45)),
+              ),
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [SajiColors.accent, SajiColors.amber400]),
+                        borderRadius: BorderRadius.circular(SajiRadius.pill),
+                      ),
+                      child: const Text('Pro ✓',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: SajiColors.brown900)),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text('Buka foto menu dengan Pro',
+                        style: TextStyle(fontSize: 11, color: SajiColors.textMuted, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

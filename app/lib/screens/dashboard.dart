@@ -220,6 +220,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             protein: (m['protein'] as num?)?.toInt() ?? 0,
                             carbs: (m['carbs'] as num?)?.toInt() ?? 0,
                             fat: (m['fat'] as num?)?.toInt() ?? 0,
+                            imagePath: m['imagePath'] as String?,
+                            isPro: isPro,
                           )),
                   ],
                 ),
