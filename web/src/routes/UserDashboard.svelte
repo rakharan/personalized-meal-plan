@@ -338,7 +338,7 @@
               {/each}
             </div>
           {:else}
-            <MealPlanView bind:planText={lastPlan.planText} bind:meals={lastPlan.meals} />
+            <MealPlanView bind:planText={lastPlan.planText} bind:meals={lastPlan.meals} {isPro} />
           {/if}
         </div>
 

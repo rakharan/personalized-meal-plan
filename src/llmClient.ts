@@ -295,6 +295,24 @@ export async function generateLeftoverRemix(leftovers: string, context: string, 
   return result.content;
 }
 
+// Extract image signature from a recipe: dish-type + main-protein + cuisine-code
+// e.g. "fried-rice-egg-id", "grilled-chicken-soy-id", "beef-curry-id"
+export async function extractImageSignature(
+  name: string, items: string[], cuisine: string | null,
+): Promise<{ signature: string; dishEn: string; visualItems: string }> {
+  const sys = `Food classifier. Output EXACTLY 2 lines, no other text:
+LINE1: signature slug = dish type + main protein + cuisine code, lowercase-hyphenated, e.g. "fried-rice-egg-id", "grilled-chicken-soy-jp", "beef-curry-rendang-id", "vegetable-soup-tofu-id"
+LINE2: English visual description of the dish for photo generation (10-20 words, ingredients visible, e.g. "dark caramelized fried rice with sweet soy glaze, 2 sunny-side-up eggs with runny yolks, golden fried tofu cubes, crispy shallots")
+Cuisine codes: id=Indonesian, jp=Japanese, kr=Korean, md=Mediterranean, th=Thai, vn=Vietnamese, in=Indian, mx=Mexican, mix=other`;
+  const user = `Meal: ${name}\nCuisine: ${cuisine || 'unknown'}\nIngredients: ${items.join(', ')}`;
+  const result = await callLLM(sys, user, { temperature: 0.2, maxTokens: 300, model: MODEL_STRUCTURED });
+  const lines = result.content.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  const signature = (lines[0] || 'unknown-dish-mix').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  const dishEn = name;
+  const visualItems = lines[1] || items.slice(0, 4).join(', ');
+  return { signature, dishEn, visualItems };
+}
+
 export async function regenerateMeal(
   planText: string,
   mealName: string,

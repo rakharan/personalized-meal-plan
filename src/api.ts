@@ -11,6 +11,7 @@ import {
   markCooked, getWebUserStreak, getWeekCalendar, getBadges,
   setUserTier, getWeekPlanTexts, getYesterdayPlanText,
   assemblePlanFromLibrary, markRecipesUsed, getRecentRecipeIds, seedRecipesFromPlan,
+  attachMealImages,
   saveWhatsAppOTP, verifyWhatsAppOTP,
   getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
   getHealthScore, getAlerts, getTodaySnapshot, getRecentUsers, getPowerUsers, getAtRiskUsers, getFeedbackWall, getPlanQuality, getPushStatus,
@@ -544,7 +545,11 @@ app.get('/api/plans/history', userAuth, async (req: Request, res: Response) => {
   if (streak === 0) {
     streak = await getWebUserStreak(userId);
   }
-  res.json({ plans: history, streak });
+  // Attach recipe images to latest plan's meals
+  if (history.length && history[0].meals?.length) {
+    history[0].meals = await attachMealImages(history[0].meals);
+  }
+  res.json({ plans: history, streak, isPro: user?.tier === 'premium' });
 });
 
 // ── Phase 2: calendar + gamification ──
@@ -868,6 +873,11 @@ app.get('/api/dashboard', authCheck, async (_req: Request, res: Response) => {
 // Static SPA serving (production)
 // ────────────────────────────────────────────────────────────────────────────
 const spaPath = join(__dirname, '..', 'web', 'dist');
+// Recipe images served from web/public (source of truth, survives rebuilds)
+const publicPath = join(__dirname, '..', 'web', 'public');
+if (existsSync(publicPath)) {
+  app.use('/images', express.static(join(publicPath, 'images')));
+}
 if (existsSync(spaPath)) {
   app.use(express.static(spaPath));
   app.get('/{*path}', (_req, res) => {

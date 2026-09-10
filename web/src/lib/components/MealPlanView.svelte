@@ -8,14 +8,18 @@
     kcal: number;
     protein: number;
     items: string[];
+    imageSignature?: string | null;
+    imagePath?: string | null;
   }
 
   let {
     planText = $bindable(''),
     meals = $bindable<Meal[]>([]),
+    isPro = false,
   }: {
     planText?: string;
     meals?: Meal[];
+    isPro?: boolean;
   } = $props();
 
   let regenerating = $state<string | null>(null);
@@ -84,6 +88,17 @@
             <div class="skel-line skel-w50"></div>
           </div>
         {:else}
+          {#if meal.imagePath}
+            <div class="meal-photo" class:blurred={!isPro}>
+              <img src={meal.imagePath} alt={meal.name} loading="lazy" />
+              {#if !isPro}
+                <a class="pro-overlay" href="#/pro">
+                  <span class="pro-pill">Pro ✓</span>
+                  <span class="pro-caption">Buka foto menu dengan Pro</span>
+                </a>
+              {/if}
+            </div>
+          {/if}
           <header class="meal-header">
             <h3 class="meal-name">{meal.name}</h3>
             <div class="meal-actions">
@@ -179,6 +194,37 @@
   }
   .meal-card.regenerating { border-color: var(--primary); }
   .meal-card:hover { border-color: var(--border-strong); }
+
+  /* Recipe photo — Pro sharp, free blurred */
+  .meal-photo {
+    position: relative; height: 140px; overflow: hidden;
+    background: var(--surface-2);
+  }
+  .meal-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .meal-photo.blurred img { filter: blur(14px) brightness(.55); transform: scale(1.1); }
+  .pro-overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: var(--space-2);
+    text-decoration: none;
+  }
+  .pro-pill {
+    background: linear-gradient(135deg, var(--accent), var(--amber-400));
+    color: var(--brown-900); padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-pill); font-size: var(--fs-xs); font-weight: var(--fw-bold);
+  }
+  .pro-caption { font-size: var(--fs-xs); color: var(--text-muted); font-weight: var(--fw-medium); }
+
+  @media (min-width: 769px) {
+    /* Desktop: horizontal meal rows, photo left thumbnail */
+    .meal-card { display: flex; }
+    .meal-photo {
+      flex: 0 0 200px; height: auto; min-height: 110px;
+      border-right: 1px solid var(--border);
+    }
+    .meal-card .meal-header, .meal-card .meal-body { flex: 1; min-width: 0; }
+    .meal-card .meal-header { flex-direction: column; align-items: flex-start; border-bottom: none; padding-top: var(--space-3); }
+    .meal-card .meal-actions { flex-wrap: wrap; justify-content: flex-start; margin-left: 0; }
+  }
 
   .meal-header {
     display: flex; justify-content: space-between; align-items: center;

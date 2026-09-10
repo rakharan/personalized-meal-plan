@@ -335,6 +335,26 @@ export async function migrateSchema(): Promise<void> {
   `);
   await pool.query('CREATE INDEX IF NOT EXISTS idx_recipes_cuisine ON recipes(cuisine, meal_type);');
   await pool.query('CREATE INDEX IF NOT EXISTS idx_recipes_usage ON recipes(times_used, last_used_at);');
+
+  // recipes.image_signature column
+  const recipeCols = new Set(
+    (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'recipes'")).rows
+      .map((r: any) => r.column_name)
+  );
+  if (!recipeCols.has('image_signature')) {
+    await pool.query('ALTER TABLE recipes ADD COLUMN image_signature TEXT');
+  }
+
+  // ── Recipe images — signature → generated photo (shared cache) ──
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS recipe_images (
+      signature   TEXT PRIMARY KEY,
+      prompt      TEXT NOT NULL,
+      image_path  TEXT NOT NULL,        -- local path served by Express: /images/recipes/<sig>.jpg
+      style       TEXT NOT NULL DEFAULT 'seedream-v5-lite',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1349,6 +1369,74 @@ export async function getRecipeIdsFromPlan(planText: string): Promise<number[]> 
   if (!names.length) return [];
   const { rows } = await pool.query('SELECT id FROM recipes WHERE name = ANY($1)', [names]);
   return rows.map((r: any) => r.id);
+}
+
+// ── Recipe images (signature cache) ──
+export async function getRecipeImage(signature: string): Promise<string | null> {
+  const { rows } = await pool.query('SELECT image_path FROM recipe_images WHERE signature = $1', [signature]);
+  return rows[0]?.image_path ?? null;
+}
+
+export async function saveRecipeImage(signature: string, prompt: string, imagePath: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO recipe_images (signature, prompt, image_path) VALUES ($1, $2, $3)
+     ON CONFLICT (signature) DO UPDATE SET image_path = $3, prompt = $2`,
+    [signature, prompt, imagePath]
+  );
+}
+
+export async function setRecipeSignature(recipeId: number, signature: string): Promise<void> {
+  await pool.query('UPDATE recipes SET image_signature = $1 WHERE id = $2', [signature, recipeId]);
+}
+
+export async function getRecipesWithoutSignature(limit = 200): Promise<{ id: number; name: string; cuisine: string | null; meal_type: string; items: string[] }[]> {
+  const { rows } = await pool.query(
+    'SELECT id, name, cuisine, meal_type, items FROM recipes WHERE image_signature IS NULL ORDER BY times_used DESC LIMIT $1',
+    [limit]
+  );
+  return rows.map((r: any) => ({
+    ...r,
+    items: Array.isArray(r.items) ? r.items : JSON.parse(r.items),
+  }));
+}
+
+export async function getSignaturesWithoutImage(limit = 100): Promise<{ signature: string; name: string; items: string[]; cuisine: string | null }[]> {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT r.image_signature AS signature,
+            (SELECT name FROM recipes r2 WHERE r2.image_signature = r.image_signature ORDER BY times_used DESC LIMIT 1) AS name,
+            (SELECT items FROM recipes r2 WHERE r2.image_signature = r.image_signature ORDER BY times_used DESC LIMIT 1) AS items,
+            (SELECT cuisine FROM recipes r2 WHERE r2.image_signature = r.image_signature ORDER BY times_used DESC LIMIT 1) AS cuisine
+     FROM recipes r
+     WHERE r.image_signature IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM recipe_images ri WHERE ri.signature = r.image_signature)
+     LIMIT $1`,
+    [limit]
+  );
+  return rows.map((r: any) => ({
+    ...r,
+    items: Array.isArray(r.items) ? r.items : (r.items ? JSON.parse(r.items) : []),
+  }));
+}
+
+// Attach image paths to meals from a plan (for API responses)
+export async function attachMealImages(meals: any[]): Promise<any[]> {
+  if (!meals.length) return meals;
+  const names = meals.map(m => {
+    const firstItem = (m.items?.[0] || '').split(':')[0].slice(0, 60);
+    return firstItem ? `${m.name} — ${firstItem}` : m.name;
+  });
+  const { rows } = await pool.query(
+    `SELECT r.name, r.image_signature, ri.image_path
+     FROM recipes r
+     LEFT JOIN recipe_images ri ON ri.signature = r.image_signature
+     WHERE r.name = ANY($1)`,
+    [names]
+  );
+  const byName = new Map(rows.map((r: any) => [r.name, r]));
+  return meals.map((m, i) => {
+    const rec = byName.get(names[i]);
+    return { ...m, imageSignature: rec?.image_signature ?? null, imagePath: rec?.image_path ?? null };
+  });
 }
 
 // Seed from a parsed plan (all meals → recipe rows)
