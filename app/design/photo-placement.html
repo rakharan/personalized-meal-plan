@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saji — Menu Photo Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1A1612; --surface: #241F1B; --surface2: #2D2823; --surface3: #3A342E;
+    --text: #E8E0D5; --text-muted: #C4B8A8; --text-subtle: #948A7E; --text-faint: #6B6157;
+    --primary: #52B788; --primary-deep: #2D6A4F; --accent: #F59E0B;
+    --primary-soft: rgba(82,183,136,.12); --accent-soft: rgba(245,158,11,.10);
+    --border: rgba(255,255,255,.06); --border-strong: rgba(255,255,255,.09);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Plus Jakarta Sans',sans-serif; }
+  body { background: var(--bg); color: var(--text); padding: 40px 20px; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .mockup-wrap { display: flex; gap: 40px; max-width: 1100px; margin: 0 auto; flex-wrap: wrap; justify-content: center; }
+  .device { flex: 1; min-width: 340px; max-width: 460px; }
+  .device-label { text-align: center; color: var(--text-subtle); font-size: 13px; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
+
+  .screen { background: var(--bg); border: 1px solid var(--border-strong); border-radius: 24px; overflow: hidden; }
+  .screen-inner { padding: 20px; }
+
+  /* Today plan card with photos */
+  .plan-card {
+    background: var(--surface); border-radius: 20px 24px 16px 28px;
+    border: 1px solid var(--border); overflow: hidden;
+  }
+  .shimmer-top { height: 4px; background: linear-gradient(90deg, var(--primary), var(--accent), var(--primary), var(--accent)); }
+  .plan-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 8px; }
+  .plan-head h2 { font-size: 20px; font-weight: 800; }
+  .cuisine-tag {
+    background: linear-gradient(135deg, var(--primary-soft), var(--accent-soft));
+    color: var(--primary); padding: 4px 12px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+  }
+
+  /* Meal with photo — the mockup subject */
+  .meal { border-top: 1px solid var(--border); }
+  .meal-photo {
+    position: relative; height: 140px; overflow: hidden;
+    background: var(--surface2);
+  }
+  .meal-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .meal-photo.blurred img { filter: blur(14px) brightness(.55); transform: scale(1.1); }
+  .pro-overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px;
+  }
+  .pro-pill {
+    background: linear-gradient(135deg, var(--accent), #FCD34D);
+    color: var(--bg); padding: 4px 14px; border-radius: 999px;
+    font-size: 12px; font-weight: 800;
+  }
+  .pro-caption { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+  .meal-body { padding: 12px 16px 16px; }
+
+  /* Desktop: horizontal meal rows, photo as left thumbnail */
+  .meal-desktop { display: flex; align-items: stretch; }
+  .meal-photo-desktop {
+    flex: 0 0 200px; height: auto; min-height: 110px;
+    border-right: 1px solid var(--border);
+  }
+  .meal-desktop .meal-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+  .meal-photo-desktop .pro-pill { position: absolute; top: 8px; right: 8px; }
+  .meal-photo-desktop .pro-overlay { inset: auto; top: 8px; right: 8px; left: auto; bottom: auto; flex-direction: row; }
+  .meal-name-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .meal-name { font-weight: 700; font-size: 14px; }
+  .macro-pills { display: flex; gap: 6px; }
+  .mp { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .mp.cal { background: var(--primary-soft); color: var(--primary); }
+  .mp.pro { background: var(--accent-soft); color: var(--accent); }
+  .meal-items { font-size: 12px; color: var(--text-subtle); line-height: 1.5; }
+
+  .photo-credit { font-size: 10px; color: var(--text-faint); padding: 0 16px 10px; }
+
+  .variant-label {
+    background: var(--surface2); border-radius: 8px; padding: 6px 12px;
+    font-size: 12px; color: var(--text-subtle); margin: 24px 0 10px; font-weight: 600;
+  }
+  .variant-label b { color: var(--text); }
+
+  .cta-row { padding: 16px; display: flex; gap: 8px; }
+  .btn-primary {
+    flex: 1; background: var(--primary); color: var(--bg); border: none;
+    padding: 12px; border-radius: 999px; font-weight: 700; font-size: 14px;
+  }
+  .btn-sec {
+    flex: 1; background: transparent; color: var(--text); border: 1px solid var(--border-strong);
+    padding: 12px; border-radius: 999px; font-weight: 600; font-size: 13px;
+  }
+
+  .note { max-width: 700px; margin: 32px auto 0; color: var(--text-subtle); font-size: 13px; line-height: 1.7; }
+  .note b { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="mockup-wrap">
+
+  <!-- ═══ DESKTOP ═══ -->
+  <div class="device" style="min-width: 100%; max-width: 100%;">
+    <div class="device-label">Desktop — dashboard (960px content)</div>
+    <div class="screen"><div class="screen-inner">
+      <div class="plan-card">
+        <div class="shimmer-top"></div>
+        <div class="plan-head">
+          <h2>Hari ini</h2>
+          <span class="cuisine-tag">🌮 Mexican</span>
+        </div>
+
+        <div class="variant-label"><b>Pro</b> — foto thumbnail kiri (desktop: meal jadi row horizontal)</div>
+
+        <div class="meal meal-desktop">
+          <div class="meal-photo meal-photo-desktop">
+            <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/generated-images/generated-7c4d47a4-4883-4e0f-b7f9-6197016de336.jpg" alt="Huevos rancheros">
+          </div>
+          <div class="meal-body">
+            <div class="meal-name-row">
+              <span class="meal-name">🍳 SARAPAN</span>
+              <div class="macro-pills"><span class="mp cal">490 kal</span><span class="mp pro">17g</span></div>
+            </div>
+            <div class="meal-items">Huevos rancheros: 2 telur mata sapi, nasi 150g, salsa tomat, 1/4 alpukat</div>
+          </div>
+        </div>
+
+        <div class="variant-label"><b>Free</b> — thumbnail kiri, blur + badge</div>
+
+        <div class="meal meal-desktop">
+          <div class="meal-photo meal-photo-desktop blurred">
+            <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/generated-images/generated-7c4d47a4-4883-4e0f-b7f9-6197016de336.jpg" alt="Burrito bowl">
+            <div class="pro-overlay">
+              <span class="pro-pill" style="font-size:10px; padding:2px 8px;">Pro ✓</span>
+            </div>
+          </div>
+          <div class="meal-body">
+            <div class="meal-name-row">
+              <span class="meal-name">🍱 MAKAN SIANG</span>
+              <div class="macro-pills"><span class="mp cal">765 kal</span><span class="mp pro">60g</span></div>
+            </div>
+            <div class="meal-items">Burrito bowl: ayam bakar 120g, nasi 200g, kacang hitam, jagung, keju</div>
+          </div>
+        </div>
+
+        <div class="cta-row">
+          <button class="btn-primary" style="flex:0 0 240px;">✓ Sudah masak</button>
+          <button class="btn-sec" style="flex:0 0 auto;">🛒 Belanja</button>
+          <button class="btn-sec" style="flex:0 0 auto;">🍳 Panduan</button>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+</div>
+
+<div class="mockup-wrap" style="margin-top: 40px;">
+
+  <!-- ═══ WEB (mobile-width card, same as desktop content col) ═══ -->
+  <div class="device">
+    <div class="device-label">Web — dashboard card</div>
+    <div class="screen"><div class="screen-inner">
+      <div class="plan-card">
+        <div class="shimmer-top"></div>
+        <div class="plan-head">
+          <h2>Hari ini</h2>
+          <span class="cuisine-tag">🌮 Mexican</span>
+        </div>
+
+        <div class="variant-label"><b>Pro</b> — foto tajam per meal</div>
+
+        <div class="meal">
+          <div class="meal-photo">
+            <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/generated-images/generated-7c4d47a4-4883-4e0f-b7f9-6197016de336.jpg" alt="Huevos rancheros">
+          </div>
+          <div class="meal-body">
+            <div class="meal-name-row">
+              <span class="meal-name">🍳 SARAPAN</span>
+              <div class="macro-pills"><span class="mp cal">490 kal</span><span class="mp pro">17g</span></div>
+            </div>
+            <div class="meal-items">Huevos rancheros: 2 telur mata sapi, nasi 150g, salsa tomat, 1/4 alpukat</div>
+          </div>
+        </div>
+
+        <div class="variant-label"><b>Free</b> — foto sama, blur + badge Pro</div>
+
+        <div class="meal">
+          <div class="meal-photo blurred">
+            <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/generated-images/generated-7c4d47a4-4883-4e0f-b7f9-6197016de336.jpg" alt="Burrito bowl">
+            <div class="pro-overlay">
+              <span class="pro-pill">Pro ✓</span>
+              <span class="pro-caption">Buka foto menu dengan Pro</span>
+            </div>
+          </div>
+          <div class="meal-body">
+            <div class="meal-name-row">
+              <span class="meal-name">🍱 MAKAN SIANG</span>
+              <div class="macro-pills"><span class="mp cal">765 kal</span><span class="mp pro">60g</span></div>
+            </div>
+            <div class="meal-items">Burrito bowl: ayam bakar 120g, nasi 200g, kacang hitam, jagung, keju</div>
+          </div>
+        </div>
+
+        <div class="cta-row">
+          <button class="btn-primary">✓ Sudah masak</button>
+          <button class="btn-sec">🛒</button>
+          <button class="btn-sec">🍳</button>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ═══ MOBILE APP ═══ -->
+  <div class="device" style="max-width: 380px;">
+    <div class="device-label">Mobile app — Flutter card</div>
+    <div class="screen"><div class="screen-inner" style="padding: 16px;">
+      <div class="plan-card">
+        <div class="shimmer-top"></div>
+        <div class="plan-head">
+          <h2 style="font-size:18px;">Hari ini</h2>
+          <span class="cuisine-tag">🌮 Mexican</span>
+        </div>
+
+        <div class="variant-label"><b>Pro</b> — foto full-bleed atas kartu meal</div>
+
+        <div class="meal">
+          <div class="meal-photo" style="height:120px;">
+            <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/generated-images/generated-7c4d47a4-4883-4e0f-b7f9-6197016de336.jpg" alt="Huevos rancheros">
+          </div>
+          <div class="meal-body">
+            <div class="meal-name-row">
+              <span class="meal-name" style="font-size:13px;">🍳 SARAPAN</span>
+              <div class="macro-pills"><span class="mp cal">490 kal</span></div>
+            </div>
+            <div class="meal-items" style="font-size:11px;">Huevos rancheros, telur 2, nasi, salsa</div>
+          </div>
+        </div>
+
+        <div class="variant-label"><b>Free</b> — blur + tap untuk upgrade</div>
+
+        <div class="meal">
+          <div class="meal-photo blurred" style="height:120px;">
+            <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/1056a07b-9258-4866-87e0-85d013629c50/generated-images/generated-7c4d47a4-4883-4e0f-b7f9-6197016de336.jpg" alt="Burrito bowl">
+            <div class="pro-overlay">
+              <span class="pro-pill">Pro ✓</span>
+              <span class="pro-caption" style="font-size:11px;">Tap untuk lihat foto</span>
+            </div>
+          </div>
+          <div class="meal-body">
+            <div class="meal-name-row">
+              <span class="meal-name" style="font-size:13px;">🍱 MAKAN SIANG</span>
+              <div class="macro-pills"><span class="mp cal">765 kal</span></div>
+            </div>
+            <div class="meal-items" style="font-size:11px;">Burrito bowl: ayam, nasi, kacang hitam</div>
+          </div>
+        </div>
+
+        <div class="cta-row" style="padding:12px;">
+          <button class="btn-primary" style="padding:12px;">✓ Sudah masak</button>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+</div>
+
+<div class="note">
+  <b>Placement rationale:</b> foto di ATAS kartu tiap meal (full-bleed, 120-140px tinggi), bukan thumbnail kecil —
+  makanan jual lewat mata. Blur pakai gambar signature cache yang sama (zero cost), Pro pill amber
+  sesuai brand. Free user tap → halaman Pro. Telegram: foto dikirim sebagai image message per meal (Pro only).
+</div>
+
+</body>
+</html>
