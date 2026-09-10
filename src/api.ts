@@ -11,7 +11,7 @@ import {
   markCooked, getWebUserStreak, getWeekCalendar, getBadges,
   setUserTier, getWeekPlanTexts, getYesterdayPlanText,
   assemblePlanFromLibrary, markRecipesUsed, getRecentRecipeIds, seedRecipesFromPlan,
-  attachMealImages,
+  attachMealImages, getImageSpend,
   saveWhatsAppOTP, verifyWhatsAppOTP,
   getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
   getHealthScore, getAlerts, getTodaySnapshot, getRecentUsers, getPowerUsers, getAtRiskUsers, getFeedbackWall, getPlanQuality, getPushStatus,
@@ -720,6 +720,15 @@ app.post('/api/profile/tier', userAuth, async (req: Request, res: Response) => {
   res.json({ user: safe });
 });
 
+// Admin: fal image spend
+app.get('/api/image-spend', authCheck, async (_req: Request, res: Response) => {
+  try {
+    res.json(await getImageSpend());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 // Admin: telegram link consumption (called by bot)
 // ────────────────────────────────────────────────────────────────────────────
@@ -834,16 +843,17 @@ app.get('/api/metrics', authCheck, async (_req: Request, res: Response) => {
 // ────────────────────────────────────────────────────────────────────────────
 app.get('/api/dashboard', authCheck, async (_req: Request, res: Response) => {
   try {
-    const [health, alerts, today, recentUsers, powerUsers, atRiskUsers, feedbackWall, planQuality, pushStatus] = await Promise.all([
+    const [health, alerts, today, recentUsers, powerUsers, atRiskUsers, feedbackWall, planQuality, pushStatus, imageSpend] = await Promise.all([
       getHealthScore(),
       getAlerts(),
       getTodaySnapshot(),
-      getRecentUsers(10),
-      getPowerUsers(5),
-      getAtRiskUsers(10),
-      getFeedbackWall(10),
+      getRecentUsers(),
+      getPowerUsers(),
+      getAtRiskUsers(),
+      getFeedbackWall(),
       getPlanQuality(),
       getPushStatus(),
+      getImageSpend(),
     ]);
     res.json({
       health,
@@ -863,6 +873,7 @@ app.get('/api/dashboard', authCheck, async (_req: Request, res: Response) => {
       feedbackWall,
       planQuality,
       pushStatus,
+      imageSpend,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

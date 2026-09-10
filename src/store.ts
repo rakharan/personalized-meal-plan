@@ -352,9 +352,17 @@ export async function migrateSchema(): Promise<void> {
       prompt      TEXT NOT NULL,
       image_path  TEXT NOT NULL,        -- local path served by Express: /images/recipes/<sig>.jpg
       style       TEXT NOT NULL DEFAULT 'seedream-v5-lite',
+      cost_usd    REAL NOT NULL DEFAULT 0.035,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  const imgCols = new Set(
+    (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'recipe_images'")).rows
+      .map((r: any) => r.column_name)
+  );
+  if (!imgCols.has('cost_usd')) {
+    await pool.query('ALTER TABLE recipe_images ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0.035');
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1377,12 +1385,25 @@ export async function getRecipeImage(signature: string): Promise<string | null> 
   return rows[0]?.image_path ?? null;
 }
 
-export async function saveRecipeImage(signature: string, prompt: string, imagePath: string): Promise<void> {
+export async function saveRecipeImage(signature: string, prompt: string, imagePath: string, costUsd = 0.035): Promise<void> {
   await pool.query(
-    `INSERT INTO recipe_images (signature, prompt, image_path) VALUES ($1, $2, $3)
+    `INSERT INTO recipe_images (signature, prompt, image_path, cost_usd) VALUES ($1, $2, $3, $4)
      ON CONFLICT (signature) DO UPDATE SET image_path = $3, prompt = $2`,
-    [signature, prompt, imagePath]
+    [signature, prompt, imagePath, costUsd]
   );
+}
+
+// fal spend report — total, this month, per-day trend
+export async function getImageSpend(): Promise<{ total: number; count: number; thisMonth: number; monthCount: number }> {
+  const { rows } = await pool.query(`
+    SELECT
+      COUNT(*)::int AS count,
+      COALESCE(SUM(cost_usd), 0)::float AS total,
+      COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()))::int AS month_count,
+      COALESCE(SUM(cost_usd) FILTER (WHERE created_at >= date_trunc('month', NOW())), 0)::float AS this_month
+    FROM recipe_images
+  `);
+  return { total: rows[0].total, count: rows[0].count, thisMonth: rows[0].this_month, monthCount: rows[0].month_count };
 }
 
 export async function setRecipeSignature(recipeId: number, signature: string): Promise<void> {
