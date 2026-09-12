@@ -5,6 +5,7 @@
   import UserLayout from '$lib/components/UserLayout.svelte';
   import Alert from '$lib/components/Alert.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
+  import LottieFire from '$lib/components/LottieFire.svelte';
 
   interface Day {
     date: string;
@@ -130,8 +131,7 @@
       {/key}
       <section class="progress-row">
         <div class="streak-card">
-          <!-- svelte-ignore a11y_unknown_tag -->
-          <dotlottie-player src="/fire-noto.lottie" autoplay loop={true} style="width:44px;height:44px"></dotlottie-player>
+          <LottieFire src="/fire-noto.lottie" size={44} />
           <div>
             <div class="streak-num">{streak}</div>
             <div class="streak-label">hari beruntun</div>

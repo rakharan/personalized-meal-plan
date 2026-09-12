@@ -6,6 +6,7 @@
   import Button from '$lib/components/Button.svelte';
   import Alert from '$lib/components/Alert.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
+  import LottieFire from '$lib/components/LottieFire.svelte';
   import MealPlanView from '$lib/components/MealPlanView.svelte';
 
   let profile = $state<any>(null);
@@ -315,8 +316,7 @@
     {#if (streak || 0) > 0}
       <section class="streak-hero" bind:this={streakEl}>
         <div class="streak-left">
-          <!-- svelte-ignore a11y_unknown_tag -- animated Noto fire (web component, loaded in index.html) -->
-          <dotlottie-player src="/fire-noto.lottie" autoplay loop={true} style="width:52px;height:52px"></dotlottie-player>
+          <LottieFire src="/fire-noto.lottie" size={52} />
           <!-- static fallback while web component loads or fails -->
           <noscript><span style="font-size:36px">🔥</span></noscript>
           <div>
