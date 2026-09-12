@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../api/api.dart';
 import '../theme/tokens.dart';
 import '../widgets/error.dart';
+import 'edit_profile.dart';
 
 class ProfilScreen extends StatefulWidget {
   final VoidCallback onLogout;
@@ -144,8 +145,11 @@ class _ProfilScreenState extends State<ProfilScreen> {
         ),
         const SizedBox(height: SajiSpace.s4),
 
-        // Goal card
-        Container(
+        // Goal card — tap to edit full profile
+        GestureDetector(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()))
+              .then((_) => setState(() {})),
+          child: Container(
           padding: const EdgeInsets.all(SajiSpace.s4),
           decoration: BoxDecoration(
             color: SajiColors.surface,
@@ -162,7 +166,10 @@ class _ProfilScreenState extends State<ProfilScreen> {
                 const SizedBox(width: 8),
                 _pill('${u['target_protein'] ?? '—'}g protein', SajiColors.accent),
               ]),
+              const SizedBox(height: 6),
+              const Text('Tap untuk edit profil →', style: TextStyle(fontSize: 11, color: SajiColors.textFaint)),
             ],
+          ),
           ),
         ),
         const SizedBox(height: SajiSpace.s4),

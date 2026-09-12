@@ -99,6 +99,75 @@
 
     <!-- Accordion sections -->
     <div class="accordion">
+      <!-- Profile & targets -->
+      <div class="acc-item" class:open={openSection === 'profile'}>
+        <button class="acc-header" onclick={() => toggleSection('profile')}>
+          <span class="acc-status-dot" class:ok={!!profile.target_calories}></span>
+          <span class="acc-title">Profil & Target</span>
+          <span class="acc-chevron">{openSection === 'profile' ? '−' : '+'}</span>
+        </button>
+        {#if openSection === 'profile'}
+          <div class="acc-body">
+            <div class="field-row">
+              <label class="f-label">Nama
+                <Input bind:value={profile.full_name} />
+              </label>
+            </div>
+            <div class="field-grid">
+              <label class="f-label">Target kalori
+                <Input type="number" bind:value={profile.target_calories} placeholder="2000" />
+              </label>
+              <label class="f-label">Target protein (g)
+                <Input type="number" bind:value={profile.target_protein} placeholder="100" />
+              </label>
+            </div>
+            <div class="field-row">
+              <span class="f-label">Goal</span>
+              <div class="ch-buttons">
+                <button class="ch-opt" class:selected={profile.goal === 'general_health'} onclick={() => { profile.goal = 'general_health'; }}>Makan sehat</button>
+                <button class="ch-opt" class:selected={profile.goal === 'weight_loss'} onclick={() => { profile.goal = 'weight_loss'; }}>Turun BB</button>
+                <button class="ch-opt" class:selected={profile.goal === 'muscle_gain'} onclick={() => { profile.goal = 'muscle_gain'; }}>Naik otot</button>
+                <button class="ch-opt" class:selected={profile.goal === 'maintenance'} onclick={() => { profile.goal = 'maintenance'; }}>Maintenance</button>
+              </div>
+            </div>
+            <div class="field-row">
+              <span class="f-label">Rotasi masakan</span>
+              <div class="ch-buttons">
+                <button class="ch-opt" class:selected={!profile.cuisine_rotation || profile.cuisine_rotation === 'rotate'} onclick={() => { profile.cuisine_rotation = 'rotate'; }}>Rotasi</button>
+                <button class="ch-opt" class:selected={profile.cuisine_rotation === 'id'} onclick={() => { profile.cuisine_rotation = 'id'; }}>Indonesia</button>
+                <button class="ch-opt" class:selected={profile.cuisine_rotation === 'jp'} onclick={() => { profile.cuisine_rotation = 'jp'; }}>Jepang</button>
+                <button class="ch-opt" class:selected={profile.cuisine_rotation === 'kr'} onclick={() => { profile.cuisine_rotation = 'kr'; }}>Korea</button>
+                <button class="ch-opt" class:selected={profile.cuisine_rotation === 'md'} onclick={() => { profile.cuisine_rotation = 'md'; }}>Mediterania</button>
+                <button class="ch-opt" class:selected={profile.cuisine_rotation === 'th'} onclick={() => { profile.cuisine_rotation = 'th'; }}>Thailand</button>
+              </div>
+            </div>
+            <div class="field-row">
+              <span class="f-label">Meal per hari</span>
+              <div class="ch-buttons">
+                {#each [2, 3, 4, 5] as n}
+                  <button class="ch-opt" class:selected={(profile.meals_per_day ?? 3) === n} onclick={() => { profile.meals_per_day = n; }}>{n}</button>
+                {/each}
+              </div>
+            </div>
+            <div class="field-row">
+              <label class="f-label">Alergi
+                <Input bind:value={profile.allergies} placeholder="mis. kacang, udang, susu" />
+              </label>
+            </div>
+            <div class="field-row">
+              <label class="f-label">Pantangan
+                <Input bind:value={profile.dietary_restrictions} placeholder="mis. halal, rendah garam" />
+              </label>
+            </div>
+            <div class="field-row">
+              <label class="f-label">Bahan yang nggak suka
+                <Input bind:value={profile.disliked_ingredients} placeholder="mis. petai, jengkol" />
+              </label>
+            </div>
+          </div>
+        {/if}
+      </div>
+
       <!-- Channels -->
       <div class="acc-item" class:open={openSection === 'channels'}>
         <button class="acc-header" onclick={() => toggleSection('channels')} class:has-status={!!profile.telegram_chat_id || !!profile.whatsapp_verified}>
@@ -301,6 +370,12 @@
 
   /* Accordion */
   .accordion { display: flex; flex-direction: column; gap: var(--space-2); }
+  .field-row { margin-bottom: var(--space-3); }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-bottom: var(--space-3); }
+  .f-label { display: block; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-muted); }
+  .f-label :global(input) { margin-top: 4px; }
+  span.f-label { margin-bottom: 6px; }
+  @media (max-width: 600px) { .field-grid { grid-template-columns: 1fr; } }
   .acc-item {
     background: var(--surface);
     border-radius: var(--radius-md);

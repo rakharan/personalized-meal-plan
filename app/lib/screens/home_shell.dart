@@ -25,7 +25,9 @@ class _HomeShellState extends State<HomeShell> {
       ProfilScreen(onLogout: widget.onLogout),
     ];
     return Scaffold(
-      body: SafeArea(child: pages[_index]),
+      body: SafeArea(
+        child: IndexedStack(index: _index, children: pages),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() { _index = i; }),

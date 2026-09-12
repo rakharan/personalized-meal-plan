@@ -18,6 +18,13 @@ class _BelanjaScreenState extends State<BelanjaScreen> {
   int? _days;
   final Set<String> _checked = {};
 
+  @override
+  void initState() {
+    super.initState();
+    // Auto-load: server returns cached list instantly if generated before
+    _load();
+  }
+
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {

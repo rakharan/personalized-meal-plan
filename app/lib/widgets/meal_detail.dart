@@ -18,11 +18,17 @@ void showMealDetail(BuildContext context, {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: SajiColors.lightSurface,
+    backgroundColor: Colors.transparent,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-    builder: (ctx) => _MealDetailSheet(
-      name: name, items: items, kcal: kcal, protein: protein, carbs: carbs, fat: fat,
-      imagePath: imagePath, isPro: isPro, onCooked: onCooked,
+    builder: (ctx) => Container(
+      decoration: const BoxDecoration(
+        color: SajiColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: _MealDetailSheet(
+        name: name, items: items, kcal: kcal, protein: protein, carbs: carbs, fat: fat,
+        imagePath: imagePath, isPro: isPro, onCooked: onCooked,
+      ),
     ),
   );
 }
@@ -168,7 +174,7 @@ class _MealDetailSheetState extends State<_MealDetailSheet> {
       border: Border.all(color: SajiColors.border),
       borderRadius: BorderRadius.circular(12),
     ),
-    child: Text('$v $label', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: SajiColors.brown900)),
+    child: Text('$v $label', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: SajiColors.text)),
   );
 
   Widget _section(String t) => Padding(

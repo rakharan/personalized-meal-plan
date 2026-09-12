@@ -51,7 +51,7 @@ class SajiError extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(SajiSpace.s4),
       decoration: BoxDecoration(
-        color: SajiColors.lightSurface,
+        color: SajiColors.surface,
         border: Border.all(color: SajiColors.danger.withOpacity(0.3)),
         borderRadius: BorderRadius.circular(SajiRadius.md),
       ),
@@ -64,7 +64,7 @@ class SajiError extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: SajiColors.brown900)),
+                Text(_title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: SajiColors.text)),
                 if (_detail.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(_detail, style: SajiText.bodySm),
