@@ -316,7 +316,7 @@
       <section class="streak-hero" bind:this={streakEl}>
         <div class="streak-left">
           <!-- svelte-ignore a11y_unknown_tag -- animated Noto fire (web component, loaded in index.html) -->
-          <dotlottie-player src="/fire-noto.lottie" autoplay loop style="width:52px;height:52px"></dotlottie-player>
+          <dotlottie-player src="/fire-noto.lottie" autoplay loop={true} style="width:52px;height:52px"></dotlottie-player>
           <!-- static fallback while web component loads or fails -->
           <noscript><span style="font-size:36px">🔥</span></noscript>
           <div>

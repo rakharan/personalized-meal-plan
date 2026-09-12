@@ -131,7 +131,7 @@
       <section class="progress-row">
         <div class="streak-card">
           <!-- svelte-ignore a11y_unknown_tag -->
-          <dotlottie-player src="/fire-noto.lottie" autoplay loop style="width:44px;height:44px"></dotlottie-player>
+          <dotlottie-player src="/fire-noto.lottie" autoplay loop={true} style="width:44px;height:44px"></dotlottie-player>
           <div>
             <div class="streak-num">{streak}</div>
             <div class="streak-label">hari beruntun</div>
