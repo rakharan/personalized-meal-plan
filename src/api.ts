@@ -11,7 +11,7 @@ import {
   markCooked, getWebUserStreak, getWeekCalendar, getBadges,
   setUserTier, getWeekPlanTexts, getYesterdayPlanText,
   assemblePlanFromLibrary, markRecipesUsed, getRecentRecipeIds, seedRecipesFromPlan,
-  attachMealImages, getImageSpend, getPlanCache, setPlanCache,
+  attachMealImages, getImageSpend, getPlanCache, setPlanCache, getMealStep, setMealStep,
   saveWhatsAppOTP, verifyWhatsAppOTP,
   getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
   getHealthScore, getAlerts, getTodaySnapshot, getRecentUsers, getPowerUsers, getAtRiskUsers, getFeedbackWall, getPlanQuality, getPushStatus,
@@ -21,7 +21,7 @@ import {
   validateEmail, validatePassword, validateAge, validateHeight, validateWeight,
   validateCalories, validateProtein, validatePhone, sanitizeText, calcTDEE, suggestProtein,
 } from './validate.js';
-import { generateMealPlan, generateCookingSteps, regenerateMeal, parseCuisine, generateShoppingList, generateLeftoverRemix } from './llmClient.js';
+import { generateMealPlan, generateCookingSteps, generateMealCookingSteps, regenerateMeal, parseCuisine, generateShoppingList, generateLeftoverRemix } from './llmClient.js';
 import { parsePlanMeals } from './store.js';
 import { createDeliveryManager, deliverPlan } from './delivery.js';
 import type { Request, Response } from 'express';
@@ -592,6 +592,29 @@ app.post('/api/plans/cooking-steps', userAuth, async (req: Request, res: Respons
   try {
     const steps = await generateCookingSteps(history[0].planText, user.locale as 'en' | 'id');
     setPlanCache(history[0].id, 'cooking_steps', steps).catch(() => {});
+    res.json({ steps });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/plans/meal-steps', userAuth, async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  const mealName = String(req.body?.mealName || '').trim();
+  if (!mealName) { res.status(400).json({ error: 'mealName diperlukan' }); return; }
+  const user = await getUserById(userId);
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+  const history = await getPlanHistory(userId, 1);
+  if (!history.length) { res.status(400).json({ error: 'Belum ada rencana' }); return; }
+  const plan = history[0];
+  const meal = plan.meals?.find((m: any) => m.name.toLowerCase() === mealName.toLowerCase());
+  if (!meal) { res.status(404).json({ error: 'Menu tidak ditemukan di plan hari ini' }); return; }
+  // Cache per plan+meal
+  const cached = await getMealStep(plan.id, meal.name);
+  if (cached) { res.json({ steps: cached, cached: true }); return; }
+  try {
+    const steps = await generateMealCookingSteps(meal.body || meal.items?.join('\n') || '', user.locale as 'en' | 'id');
+    setMealStep(plan.id, meal.name, steps).catch(() => {});
     res.json({ steps });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

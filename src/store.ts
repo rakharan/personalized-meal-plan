@@ -375,6 +375,21 @@ export async function migrateSchema(): Promise<void> {
   if (!mphCols.has('cooking_steps')) {
     await pool.query('ALTER TABLE meal_plan_history ADD COLUMN cooking_steps TEXT');
   }
+  if (!mphCols.has('meal_steps')) {
+    await pool.query("ALTER TABLE meal_plan_history ADD COLUMN meal_steps JSONB NOT NULL DEFAULT '{}'::jsonb");
+  }
+}
+
+export async function getMealStep(planId: number, mealName: string): Promise<string | null> {
+  const { rows } = await pool.query('SELECT meal_steps ->> $2 AS steps FROM meal_plan_history WHERE id = $1', [planId, mealName]);
+  return rows[0]?.steps ?? null;
+}
+
+export async function setMealStep(planId: number, mealName: string, steps: string): Promise<void> {
+  await pool.query(
+    `UPDATE meal_plan_history SET meal_steps = meal_steps || jsonb_build_object($2::text, $3::text) WHERE id = $1`,
+    [planId, mealName, steps]
+  );
 }
 
 export async function getPlanCache(planId: number): Promise<{ grocery_list: string | null; cooking_steps: string | null } | null> {

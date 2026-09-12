@@ -31,6 +31,7 @@ class MealTile extends StatelessWidget {
   final int fat;
   final String? imagePath;
   final bool isPro;
+  final VoidCallback? onTap;
 
   const MealTile({
     super.key,
@@ -42,6 +43,7 @@ class MealTile extends StatelessWidget {
     this.fat = 0,
     this.imagePath,
     this.isPro = false,
+    this.onTap,
   });
 
   String get _emoji {
@@ -54,7 +56,9 @@ class MealTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (imagePath != null) _MealPhoto(imagePath: imagePath!, isPro: isPro),
@@ -89,6 +93,32 @@ class MealTile extends StatelessWidget {
           ),
         ),
       ],
+      ),
+    );
+  }
+}
+
+// Pulsing photo placeholder while recipe image loads
+class _PhotoShimmer extends StatefulWidget {
+  const _PhotoShimmer();
+  @override
+  State<_PhotoShimmer> createState() => _PhotoShimmerState();
+}
+
+class _PhotoShimmerState extends State<_PhotoShimmer> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (ctx, _) => Container(
+        color: Color.lerp(SajiColors.surface2, SajiColors.surface3, _ctrl.value),
+      ),
     );
   }
 }
@@ -115,8 +145,7 @@ class _MealPhoto extends StatelessWidget {
               fit: BoxFit.cover,
               loadingBuilder: (ctx, child, progress) => progress == null
                   ? child
-                  : Container(color: SajiColors.surface2,
-                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: SajiColors.primary))),
+                  : const _PhotoShimmer(),
               errorBuilder: (ctx, err, st) => Container(color: SajiColors.surface2),
             ),
             if (!isPro) ...[

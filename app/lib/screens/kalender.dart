@@ -25,8 +25,8 @@ class _KalenderScreenState extends State<KalenderScreen> {
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+  Future<void> _load({bool background = false}) async {
+    if (!background) setState(() { _loading = true; _error = null; });
     try {
       final results = await Future.wait([
         api.getCalendar(_weekOffset),
@@ -45,6 +45,11 @@ class _KalenderScreenState extends State<KalenderScreen> {
     }
   }
 
+  void _navWeek(int delta) {
+    setState(() { _weekOffset += delta; });
+    _load(background: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -61,22 +66,26 @@ class _KalenderScreenState extends State<KalenderScreen> {
               Text('Kalender', style: SajiText.h1),
               const Spacer(),
               IconButton(
-                onPressed: () { setState(() { _weekOffset--; }); _load(); },
+                onPressed: () => _navWeek(-1),
                 icon: const Icon(Icons.chevron_left, color: SajiColors.textSubtle),
               ),
               IconButton(
-                onPressed: _weekOffset >= 0 ? null : () { setState(() { _weekOffset++; }); _load(); },
+                onPressed: _weekOffset >= 0 ? null : () => _navWeek(1),
                 icon: const Icon(Icons.chevron_right, color: SajiColors.textSubtle),
               ),
             ],
           ),
           const SizedBox(height: SajiSpace.s3),
 
-          // Week strip
+          // Week strip — crossfades when week data swaps (no full-page reload)
           SizedBox(
             height: 96,
-            child: Row(
-              children: _days.map((d) => Expanded(child: _DayCard(day: d))).toList(),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Row(
+                key: ValueKey(_days.isEmpty ? 'empty' : (_days.first as Map?)?['date'] ?? 'week'),
+                children: _days.map((d) => Expanded(child: _DayCard(day: d))).toList(),
+              ),
             ),
           ),
           const SizedBox(height: SajiSpace.s4),

@@ -81,10 +81,29 @@ class Api {
 
   Future<Map<String, dynamic>> getCookingSteps() => _post('/api/plans/cooking-steps');
 
+  Future<Map<String, dynamic>> getMealSteps(String mealName) =>
+      _post('/api/plans/meal-steps', {'mealName': mealName});
+
   Future<Map<String, dynamic>> getGroceryList() => _post('/api/plans/grocery-list');
 
   Future<Map<String, dynamic>> remix(String leftovers) =>
       _post('/api/plans/leftover-remix', {'leftovers': leftovers});
+
+  // ── Profile ──
+  Future<Map<String, dynamic>> updateProfile(Map<String, dynamic> updates) async {
+    final res = await http.put(Uri.parse('$baseUrl/api/profile'),
+        headers: _headers, body: jsonEncode(updates));
+    final data = res.body.isNotEmpty ? jsonDecode(res.body) : <String, dynamic>{};
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, data is Map ? (data['error'] ?? 'Request gagal') : 'Request gagal');
+    }
+    user = data['user'] as Map<String, dynamic>?;
+    return data;
+  }
+
+  Future<Map<String, dynamic>> getTelegramLink() => _post('/api/profile/connect-telegram', {});
+
+  Future<Map<String, dynamic>> setTier(String tier) => _post('/api/profile/tier', {'tier': tier});
 
   // ── Calendar + badges ──
   Future<Map<String, dynamic>> getCalendar([int week = 0]) => _get('/api/calendar?week=$week');

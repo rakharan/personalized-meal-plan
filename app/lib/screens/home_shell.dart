@@ -29,11 +29,14 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (i) => setState(() { _index = i; }),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: SajiColors.primary,
+        unselectedItemColor: SajiColors.textMuted,
         items: const [
-          BottomNavigationBarItem(icon: Text('🍽️', style: TextStyle(fontSize: 20)), label: 'Dasbor'),
-          BottomNavigationBarItem(icon: Text('📅', style: TextStyle(fontSize: 20)), label: 'Kalender'),
-          BottomNavigationBarItem(icon: Text('🛒', style: TextStyle(fontSize: 20)), label: 'Belanja'),
-          BottomNavigationBarItem(icon: Text('👤', style: TextStyle(fontSize: 20)), label: 'Profil'),
+          BottomNavigationBarItem(icon: Icon(Icons.dinner_dining_outlined), activeIcon: Icon(Icons.dinner_dining), label: 'Dasbor'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), activeIcon: Icon(Icons.calendar_month), label: 'Kalender'),
+          BottomNavigationBarItem(icon: Icon(Icons.shopping_basket_outlined), activeIcon: Icon(Icons.shopping_basket), label: 'Belanja'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
     );

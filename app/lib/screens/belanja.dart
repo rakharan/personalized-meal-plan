@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../api/api.dart';
 import '../theme/tokens.dart';
+import '../widgets/error.dart';
 
 class BelanjaScreen extends StatefulWidget {
   const BelanjaScreen({super.key});
@@ -99,7 +100,7 @@ class _BelanjaScreenState extends State<BelanjaScreen> {
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: SajiSpace.s3),
-            child: Text(_error!, style: const TextStyle(color: SajiColors.danger)),
+            child: SajiError(error: _error!, onRetry: _load),
           ),
         const SizedBox(height: 80),
       ],

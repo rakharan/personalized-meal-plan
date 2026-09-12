@@ -4,6 +4,9 @@ import '../theme/tokens.dart';
 import '../widgets/logo.dart';
 import '../widgets/streak_hero.dart';
 import '../widgets/plan_widgets.dart';
+import '../widgets/streak_confetti.dart';
+import '../widgets/meal_detail.dart';
+import '../widgets/error.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -12,7 +15,15 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+  late final AnimationController _confettiCtrl =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
+
+  @override
+  void dispose() {
+    _confettiCtrl.dispose();
+    super.dispose();
+  }
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _plan;
@@ -86,6 +97,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _cookedToday = true;
         _streak = (data['streak'] as num?)?.toInt() ?? _streak;
       });
+      _confettiCtrl.forward(from: 0);
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -136,7 +148,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         padding: const EdgeInsets.all(SajiSpace.s4),
         children: [
           if (_streak > 0) ...[
-            StreakHero(streak: _streak),
+            StreakConfetti(
+              controller: _confettiCtrl,
+              child: StreakHero(streak: _streak),
+            ),
             const SizedBox(height: SajiSpace.s4),
           ],
           Row(
@@ -160,7 +175,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: SajiSpace.s3),
-              child: Text(_error!, style: const TextStyle(color: SajiColors.danger, fontSize: 13)),
+              child: SajiError(error: _error!, onRetry: _load),
             ),
 
           if (_plan == null && !_actionLoading)
@@ -208,10 +223,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ],
                     if (_actionLoading && _meals.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 40),
-                        child: Center(child: CircularProgressIndicator(color: SajiColors.primary)),
-                      )
+                      const _PlanSkeleton()
                     else
                       ..._meals.map((m) => MealTile(
                             name: m['name'] ?? '',
@@ -222,6 +234,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             fat: (m['fat'] as num?)?.toInt() ?? 0,
                             imagePath: m['imagePath'] as String?,
                             isPro: isPro,
+                            onTap: () => showMealDetail(
+                              context,
+                              name: m['name'] ?? '',
+                              items: ((m['items'] as List?) ?? []).cast<String>(),
+                              kcal: (m['kcal'] as num?)?.toInt() ?? 0,
+                              protein: (m['protein'] as num?)?.toInt() ?? 0,
+                              carbs: (m['carbs'] as num?)?.toInt() ?? 0,
+                              fat: (m['fat'] as num?)?.toInt() ?? 0,
+                              imagePath: m['imagePath'] as String?,
+                              isPro: isPro,
+                              onCooked: _cookedToday ? null : _markCooked,
+                            ),
                           )),
                   ],
                 ),
@@ -285,6 +309,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (k.contains(e.key)) return e.value;
     }
     return '🍽️';
+  }
+}
+
+// Shimmer box — pulsing placeholder block
+class Shimmer extends StatefulWidget {
+  final double width;
+  final double height;
+  final double radius;
+  const Shimmer({super.key, this.width = double.infinity, this.height = 16, this.radius = 8});
+
+  @override
+  State<Shimmer> createState() => _ShimmerState();
+}
+
+class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (ctx, _) => Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: Color.lerp(SajiColors.surface2, SajiColors.surface3, _ctrl.value),
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
+      ),
+    );
+  }
+}
+
+// Plan generation skeleton — photo block + title + lines, x3 meals
+class _PlanSkeleton extends StatelessWidget {
+  const _PlanSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(3, (i) => Padding(
+        padding: const EdgeInsets.only(bottom: SajiSpace.s4),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Shimmer(height: 130, radius: 16),
+          const SizedBox(height: 10),
+          Shimmer(width: 140, height: 14),
+          const SizedBox(height: 6),
+          Shimmer(width: 220, height: 11),
+          const SizedBox(height: 4),
+          Shimmer(width: 180, height: 11),
+        ]),
+      )),
+    );
   }
 }
 

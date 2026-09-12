@@ -283,6 +283,16 @@ export async function generateCookingSteps(planText: string, locale: 'en' | 'id'
   return result.content;
 }
 
+// Single-meal cooking steps — for meal detail sheet
+export async function generateMealCookingSteps(mealBody: string, locale: 'en' | 'id' = 'en'): Promise<string> {
+  const sys = locale === 'id'
+    ? 'Koki praktis. Panduan masak SATU menu ini saja: 🍳 Peralatan, 📝 Langkah bernomor (estimasi menit), 🍽️ Penyajian. Bahasa Indonesia, ringkas, tanpa pembuka.'
+    : 'Practical cook. Instructions for THIS ONE dish only: 🍳 Utensils, 📝 Numbered steps (with minutes), 🍽️ Serving. Concise, no preamble.';
+  const result = await callLLM(sys, mealBody, { temperature: 0.4, maxTokens: 2048 });
+  await logUsageSafe(undefined, result.usage, 'cooking-meal');
+  return result.content;
+}
+
 export async function generateLeftoverRemix(leftovers: string, context: string, locale: 'en' | 'id' = 'en', chatId?: number): Promise<string> {
   const sys = locale === 'id'
     ? 'Koki kreatif. Dari bahan sisa yang disebutkan user, buat 2-3 saran meal baru. Untuk tiap saran: nama meal, bahan sisa yang dipakai, bahan tambahan (jika ada, harus umum di Indonesia), estimasi kkal+protein. Bahasa Indonesia santai, ringkas, tanpa preamble, tanpa markdown.'
