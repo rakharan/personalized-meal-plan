@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api.dart';
 import '../theme/tokens.dart';
 import '../widgets/error.dart';
@@ -21,12 +22,26 @@ class _BelanjaScreenState extends State<BelanjaScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto-load: server returns cached list instantly if generated before
+    _restoreLocal();
     _load();
   }
 
+  // Local cache — list survives tab switches, app restarts, offline
+  Future<void> _restoreLocal() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString('saji-grocery-list');
+    if (cached != null && mounted && _list == null) {
+      setState(() {
+        _list = cached;
+        _week = prefs.getString('saji-grocery-week');
+      });
+    }
+  }
+
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    // Skip spinner if we already have a list (local or state) — refresh silently
+    if (_list == null) setState(() { _loading = true; });
+    _error = null;
     try {
       final data = await api.getGroceryList();
       setState(() {
@@ -34,8 +49,14 @@ class _BelanjaScreenState extends State<BelanjaScreen> {
         _week = data['week'] as String?;
         _days = (data['daysCovered'] as num?)?.toInt();
       });
+      final prefs = await SharedPreferences.getInstance();
+      if (_list != null) {
+        await prefs.setString('saji-grocery-list', _list!);
+        await prefs.setString('saji-grocery-week', _week ?? '');
+      }
     } catch (e) {
-      setState(() { _error = e.toString(); });
+      if (_list == null) setState(() { _error = e.toString(); });
+      // else: keep showing local cache, silent fail
     } finally {
       if (mounted) setState(() { _loading = false; });
     }
