@@ -102,7 +102,8 @@
     .sheet { max-width: 480px; border-radius: 24px !important; }
   }
   .sheet {
-    background: var(--card); border-radius: 24px 24px 0 0; width: 100%;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 24px 24px 0 0; width: 100%;
     max-height: 85vh; overflow-y: auto; padding: 12px 20px 28px;
     animation: slideUp .25s cubic-bezier(.2,.9,.3,1);
   }
@@ -114,42 +115,42 @@
   .photo.blurred img { filter: blur(14px) brightness(.55); transform: scale(1.1); }
   .kcal-chip {
     position: absolute; bottom: 10px; left: 10px;
-    background: rgba(26,22,18,.85); color: var(--bg); padding: 4px 10px; border-radius: 999px;
+    background: rgba(26,22,18,.85); color: #FDF8F2; padding: 4px 10px; border-radius: 999px;
     font-size: 11px; font-weight: 700;
   }
   .pro-overlay {
     position: absolute; inset: 0; display: grid; place-items: center; text-decoration: none;
   }
   .pro-pill {
-    background: linear-gradient(90deg, var(--accent), var(--amber-400, #fcd34d));
-    color: var(--brown-900, #1a1612); padding: 6px 14px; border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), #fcd34d);
+    color: #1a1612; padding: 6px 14px; border-radius: 999px;
     font-size: 13px; font-weight: 800;
   }
 
-  .title { font-size: 20px; font-weight: 800; color: var(--foreground); }
+  .title { font-size: 20px; font-weight: 800; color: var(--text); }
   .macros { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 16px; }
   .macro {
-    background: var(--surface-2, var(--card)); border: 1px solid var(--border);
+    background: var(--surface-2); border: 1px solid var(--border);
     border-radius: 12px; padding: 8px 12px; font-size: 12px; font-weight: 700;
-    color: var(--muted-foreground);
+    color: var(--text-muted);
   }
-  .macro b { color: var(--foreground); font-size: 14px; }
+  .macro b { color: var(--text); font-size: 14px; }
 
   .sec {
     font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px;
     color: var(--primary); margin: 16px 0 8px;
   }
   .ings { list-style: none; padding: 0; }
-  .ings li { font-size: 13.5px; color: var(--foreground); padding: 4px 0; display: flex; gap: 8px; }
+  .ings li { font-size: 13.5px; color: var(--text); padding: 4px 0; display: flex; gap: 8px; }
   .ings li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 7px; }
-  .raw { font-size: 13px; white-space: pre-wrap; color: var(--muted-foreground); font-family: inherit; }
+  .raw { font-size: 13px; white-space: pre-wrap; color: var(--text-muted); font-family: inherit; }
 
-  .steps { font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; color: var(--foreground); }
-  .steps.muted { color: var(--muted-foreground); }
+  .steps { font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; color: var(--text); }
+  .steps.muted { color: var(--text-muted); }
   .skel { display: grid; gap: 8px; }
   .skel-line {
     height: 12px; border-radius: 6px;
-    background: linear-gradient(90deg, var(--border) 25%, var(--card) 50%, var(--border) 75%);
+    background: linear-gradient(90deg, var(--border) 25%, var(--surface-2) 50%, var(--border) 75%);
     background-size: 200% 100%; animation: shimmer 1.2s infinite;
   }
   @keyframes shimmer { to { background-position: -200% 0; } }

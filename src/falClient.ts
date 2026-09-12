@@ -31,7 +31,7 @@ function cuisineCode(signature: string): string {
 
 export function buildFoodPrompt(dishName: string, visualItems: string, signature: string): string {
   const plating = PLATING[cuisineCode(signature)] || PLATING.mix;
-  return `Professional food photography of ${dishName}: ${visualItems}. Served on ${plating}. Warm golden side light, gentle steam rising, shallow depth of field, 85mm lens, editorial food magazine quality, appetizing.`;
+  return `Professional food photography of ${dishName}: ${visualItems}. Served on ${plating}. Warm golden side light, gentle steam rising, shallow depth of field, 85mm lens, editorial food magazine quality, appetizing. Absolutely no text, no letters, no words, no labels, no logos, no watermarks anywhere in the image — clean food only.`;
 }
 
 export async function generateRecipeImage(

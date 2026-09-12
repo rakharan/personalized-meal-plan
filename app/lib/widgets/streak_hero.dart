@@ -21,7 +21,7 @@ class StreakHero extends StatelessWidget {
       child: Row(
         children: [
           Lottie.asset(
-            'assets/fire-noto.lottie',
+            'assets/fire-noto.json',
             width: 56,
             height: 56,
             repeat: true,

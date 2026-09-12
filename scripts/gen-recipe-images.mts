@@ -6,6 +6,16 @@ import { generateRecipeImage, buildFoodPrompt } from '../src/falClient.js';
 
 const DRY_RUN = process.argv.includes('--dry');
 const LIMIT = Number(process.argv.find(a => a.startsWith('--limit='))?.split('=')[1] ?? 100);
+// --only=sig1,sig2: force-regenerate specific signatures (deletes DB row + file first)
+const ONLY = process.argv.find(a => a.startsWith('--only='))?.split('=')[1]?.split(',').filter(Boolean);
+if (ONLY?.length) {
+  const { unlink } = await import('node:fs/promises');
+  for (const sig of ONLY) {
+    await pool.query('DELETE FROM recipe_images WHERE signature = $1', [sig]);
+    await unlink(`web/public/images/recipes/${sig}.jpg`).catch(() => {});
+    console.log(`cleared ${sig}`);
+  }
+}
 
 // Step 1: signatures
 const recipes = await getRecipesWithoutSignature(LIMIT);

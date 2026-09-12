@@ -97,17 +97,20 @@
   function burstConfetti() {
     const hero = streakEl;
     if (!hero) return;
+    // Fixed-position particles — streak-hero has overflow:hidden, so spawn at page level
+    const r = hero.getBoundingClientRect();
+    const ox = r.left + r.width * 0.3, oy = r.top + r.height * 0.6;
     const colors = ['#FFD27A', '#FF9A3D', '#5C8A4D', '#E8A33D', '#FFF3D6'];
     for (let i = 0; i < 16; i++) {
       const c = document.createElement('div');
-      c.style.cssText = `position:absolute;width:${6 + Math.random() * 4}px;height:${6 + Math.random() * 4}px;left:50%;top:60%;pointer-events:none;z-index:5;opacity:1;`;
+      c.style.cssText = `position:fixed;width:${6 + Math.random() * 4}px;height:${6 + Math.random() * 4}px;left:${ox}px;top:${oy}px;pointer-events:none;z-index:200;`;
       c.style.background = colors[i % colors.length];
       c.style.borderRadius = i % 2 ? '50%' : '2px';
       const ang = (Math.PI * 2 * i) / 16 + Math.random() * .5;
       const dist = 60 + Math.random() * 60;
       const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist - 50;
       const rot = Math.random() * 720 - 360;
-      hero.appendChild(c);
+      document.body.appendChild(c);
       c.animate(
         [{ transform: 'translate(0,0) rotate(0)', opacity: 1 },
          { transform: `translate(${dx}px,${dy}px) rotate(${rot}deg)`, opacity: 0 }],
@@ -314,6 +317,8 @@
         <div class="streak-left">
           <!-- svelte-ignore a11y_unknown_tag -- animated Noto fire (web component, loaded in index.html) -->
           <dotlottie-player src="/fire-noto.lottie" autoplay loop style="width:52px;height:52px"></dotlottie-player>
+          <!-- static fallback while web component loads or fails -->
+          <noscript><span style="font-size:36px">🔥</span></noscript>
           <div>
             <div class="streak-num" class:pop={streakPop}>{streak}</div>
             <div class="streak-label">hari beruntun</div>
@@ -521,13 +526,14 @@
     gap: var(--space-6); padding: var(--space-5) var(--space-6);
     background: linear-gradient(135deg, var(--primary), var(--leaf-400));
     border-radius: 24px 28px 20px 32px; margin-bottom: var(--space-6);
-    color: var(--text-on-primary); position: relative;
+    color: var(--text-on-primary); position: relative; overflow: hidden;
   }
   .streak-hero::before {
     content: ''; position: absolute; top: -60%; right: -10%;
     width: 240px; height: 240px; background: rgba(255, 255, 255, .12);
-    border-radius: 50%;
+    border-radius: 50%; pointer-events: none;
   }
+  .streak-hero > * { position: relative; z-index: 1; }
   .streak-left { display: flex; align-items: center; gap: var(--space-3); position: relative; z-index: 1; }
   .streak-flame { font-size: var(--fs-2xl); }
   .streak-num { font-size: var(--fs-2xl); font-weight: var(--fw-bold); line-height: 1; font-family: var(--font-mono); }
