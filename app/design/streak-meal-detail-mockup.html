@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saji — Streak Animation + Meal Detail Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FDF8F2; --surface: #FFFFFF; --surface2: #F7F1E8;
+    --brown: #3D2C1E; --brown-2: #6B5138;
+    --green: #5C8A4D; --green-soft: #E8F0E2;
+    --amber: #E8A33D; --amber-soft: #FBEED7;
+    --red: #C4502E;
+    --border: #EBE2D5;
+    --radius: 20px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+  body { background: var(--surface2); padding: 40px 24px; display: flex; flex-direction: column; align-items: center; gap: 32px; }
+  .label { font-size: 13px; font-weight: 700; color: var(--brown-2); text-transform: uppercase; letter-spacing: 1px; }
+  .frames { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; }
+
+  .phone {
+    width: 340px; background: var(--bg); border-radius: 36px; border: 8px solid #2B2118;
+    overflow: hidden; box-shadow: 0 24px 48px rgba(61,44,30,.18);
+  }
+  .screen { padding: 20px 18px 28px; }
+
+  /* ─── STREAK HERO with animated flame ─── */
+  .streak-hero {
+    background: linear-gradient(135deg, #3D2C1E 0%, #5A3A22 100%);
+    border-radius: var(--radius); padding: 22px 20px; color: #FDF8F2;
+    display: flex; align-items: center; gap: 16px;
+    position: relative; overflow: hidden;
+  }
+  .flame-wrap { position: relative; width: 72px; height: 88px; flex-shrink: 0; }
+
+  /* Flame layers — pure CSS animated */
+  .flame {
+    position: absolute; bottom: 0; left: 50%; transform-origin: 50% 100%;
+    border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  }
+  .flame-outer {
+    width: 56px; height: 72px; margin-left: -28px;
+    background: radial-gradient(ellipse at 50% 80%, #FF9A3D 0%, #E86A2D 55%, #C4502E 100%);
+    animation: flicker 1.6s ease-in-out infinite;
+    filter: blur(1px);
+  }
+  .flame-mid {
+    width: 38px; height: 52px; margin-left: -19px;
+    background: radial-gradient(ellipse at 50% 80%, #FFD27A 0%, #FF9A3D 70%);
+    animation: flicker 1.6s ease-in-out infinite .15s;
+  }
+  .flame-inner {
+    width: 20px; height: 30px; margin-left: -10px; bottom: 6px;
+    background: radial-gradient(ellipse at 50% 85%, #FFF3D6 0%, #FFD27A 75%);
+    animation: flicker 1.6s ease-in-out infinite .3s;
+  }
+  @keyframes flicker {
+    0%, 100% { transform: translateX(-50%) scaleY(1) scaleX(1) rotate(0deg); }
+    25% { transform: translateX(-52%) scaleY(1.06) scaleX(.96) rotate(-2deg); }
+    50% { transform: translateX(-48%) scaleY(.96) scaleX(1.04) rotate(2deg); }
+    75% { transform: translateX(-51%) scaleY(1.03) scaleX(.98) rotate(-1deg); }
+  }
+
+  /* Embers */
+  .ember {
+    position: absolute; bottom: 40px; width: 5px; height: 5px; border-radius: 50%;
+    background: #FFD27A; opacity: 0;
+    animation: rise 2.4s ease-in infinite;
+  }
+  .ember:nth-child(5) { left: 22px; animation-delay: 0s; }
+  .ember:nth-child(6) { left: 38px; animation-delay: .8s; width: 4px; height: 4px; }
+  .ember:nth-child(7) { left: 30px; animation-delay: 1.6s; width: 3px; height: 3px; }
+  @keyframes rise {
+    0% { transform: translateY(0) scale(1); opacity: 0; }
+    15% { opacity: .9; }
+    100% { transform: translateY(-70px) translateX(8px) scale(.3); opacity: 0; }
+  }
+
+  .streak-num {
+    font-size: 44px; font-weight: 800; line-height: 1;
+    background: linear-gradient(180deg, #FFD27A, #FF9A3D);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .streak-label { font-size: 13px; font-weight: 600; opacity: .85; margin-top: 2px; }
+  .streak-sub { font-size: 11px; opacity: .6; margin-top: 6px; }
+  .streak-days { display: flex; gap: 5px; margin-top: 10px; }
+  .streak-dot {
+    width: 22px; height: 22px; border-radius: 8px; display: grid; place-items: center;
+    font-size: 10px; font-weight: 700; background: rgba(255,255,255,.12); color: rgba(255,255,255,.5);
+  }
+  .streak-dot.done { background: var(--amber); color: var(--brown); }
+  .streak-dot.today { outline: 2px solid #FFD27A; outline-offset: 1px; }
+
+  /* Static comparison — plain emoji version */
+  .streak-static { display: flex; align-items: center; gap: 14px; }
+  .streak-static .emoji { font-size: 52px; }
+
+  /* ─── MEAL DETAIL SHEET ─── */
+  .sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 14px; }
+  .meal-photo { height: 150px; border-radius: var(--radius); overflow: hidden; margin-bottom: 14px; position: relative; }
+  .meal-photo img { width: 100%; height: 100%; object-fit: cover; }
+  .meal-photo .kcal-chip {
+    position: absolute; bottom: 10px; left: 10px;
+    background: rgba(61,44,30,.85); color: #FDF8F2; padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+  }
+  .meal-title { font-size: 20px; font-weight: 800; color: var(--brown); }
+  .macro-row { display: flex; gap: 8px; margin: 10px 0 16px; }
+  .macro { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; font-size: 12px; font-weight: 700; color: var(--brown-2); }
+  .macro b { color: var(--brown); font-size: 14px; }
+
+  .sec-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; color: var(--green); margin: 14px 0 8px; display: flex; align-items: center; gap: 6px; }
+  .ingredient { display: flex; gap: 8px; font-size: 13.5px; color: var(--brown); padding: 5px 0; align-items: baseline; }
+  .ingredient::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--amber); flex-shrink: 0; transform: translateY(-2px); }
+
+  .step { display: flex; gap: 10px; padding: 7px 0; font-size: 13.5px; color: var(--brown); line-height: 1.5; }
+  .step-num {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--green-soft); color: var(--green);
+    font-size: 11px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0;
+  }
+
+  .cooked-btn {
+    width: 100%; margin-top: 18px; padding: 14px; border: none; border-radius: 16px;
+    background: var(--green); color: white; font-size: 15px; font-weight: 800;
+  }
+</style>
+</head>
+<body>
+
+<div class="label">Mockup — animated streak + meal detail (phone)</div>
+
+<div class="frames">
+
+  <!-- ═══ FRAME 1: animated flame streak ═══ -->
+  <div>
+    <div class="label" style="margin-bottom:10px">A — animated flame (CSS, proposed)</div>
+    <div class="phone"><div class="screen">
+      <div class="streak-hero">
+        <div class="flame-wrap">
+          <div class="flame flame-outer"></div>
+          <div class="flame flame-mid"></div>
+          <div class="flame flame-inner"></div>
+          <div class="ember"></div><div class="ember"></div><div class="ember"></div>
+        </div>
+        <div>
+          <div class="streak-num">5 hari</div>
+          <div class="streak-label">streak masak</div>
+          <div class="streak-sub">Jangan sampai putus — masak hari ini!</div>
+          <div class="streak-days">
+            <div class="streak-dot done">S</div><div class="streak-dot done">S</div>
+            <div class="streak-dot done">R</div><div class="streak-dot done">K</div>
+            <div class="streak-dot done">J</div><div class="streak-dot today">S</div>
+            <div class="streak-dot">M</div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ═══ FRAME 2: static emoji comparison ═══ -->
+  <div>
+    <div class="label" style="margin-bottom:10px">B — current (static emoji)</div>
+    <div class="phone"><div class="screen">
+      <div class="streak-hero">
+        <div class="streak-static">
+          <div class="emoji">🔥</div>
+          <div>
+            <div class="streak-num">5 hari</div>
+            <div class="streak-label">streak masak</div>
+            <div class="streak-sub">Jangan sampai putus — masak hari ini!</div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ═══ FRAME 3: meal detail sheet ═══ -->
+  <div>
+    <div class="label" style="margin-bottom:10px">Meal detail — tap a menu card</div>
+    <div class="phone"><div class="screen">
+      <div class="sheet-handle"></div>
+      <div class="meal-photo">
+        <img src="/images/recipes/grilled-mackerel-id.jpg" alt="" onerror="this.parentElement.style.background='var(--amber-soft)';this.remove()">
+        <div class="kcal-chip">~520 kkal · 38g protein</div>
+      </div>
+      <div class="meal-title">Ikan Kembung Bakar</div>
+      <div class="macro-row">
+        <div class="macro"><b>520</b> kkal</div>
+        <div class="macro"><b>38g</b> protein</div>
+        <div class="macro"><b>30g</b> karbo</div>
+        <div class="macro"><b>12g</b> lemak</div>
+      </div>
+      <div class="sec-title">Bahan</div>
+      <div class="ingredient">150g ikan kembung segar</div>
+      <div class="ingredient">2 sdm kecap manis</div>
+      <div class="ingredient">Jeruk nipis, bawang merah, cabai</div>
+      <div class="sec-title">Panduan masak</div>
+      <div class="step"><div class="step-num">1</div><div>Lumuri ikan dengan garam + perasan jeruk nipis, diamkan 10 menit.</div></div>
+      <div class="step"><div class="step-num">2</div><div>Panaskan grill pan/teflon, olesi sedikit minyak.</div></div>
+      <div class="step"><div class="step-num">3</div><div>Bakar ikan 4–5 menit per sisi, olesi kecap manis di menit terakhir.</div></div>
+      <button class="cooked-btn">✓ Sudah masak</button>
+    </div></div>
+  </div>
+
+</div>
+
+</body>
+</html>

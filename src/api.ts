@@ -11,7 +11,7 @@ import {
   markCooked, getWebUserStreak, getWeekCalendar, getBadges,
   setUserTier, getWeekPlanTexts, getYesterdayPlanText,
   assemblePlanFromLibrary, markRecipesUsed, getRecentRecipeIds, seedRecipesFromPlan,
-  attachMealImages, getImageSpend,
+  attachMealImages, getImageSpend, getPlanCache, setPlanCache,
   saveWhatsAppOTP, verifyWhatsAppOTP,
   getDAU, getMAU, getConversion, getTokenEconomics, getPlanTrend, getRetention, getFeatureUsage, getActivityByHour, getCuisinePopularity, getChurnRate,
   getHealthScore, getAlerts, getTodaySnapshot, getRecentUsers, getPowerUsers, getAtRiskUsers, getFeedbackWall, getPlanQuality, getPushStatus,
@@ -505,7 +505,8 @@ app.post('/api/plans/generate', userAuth, async (req: Request, res: Response) =>
       await savePlanHistory(userId, assembled.planText, cuisine, user.target_calories, user.target_protein);
       markRecipesUsed(assembled.recipes.map(r => r.id)).catch(() => {});
       const meals = parsePlanMeals(assembled.planText);
-      res.json({ plan: assembled.planText, cuisine, meals, source: 'library' });
+      const mealsWithImages = await attachMealImages(meals);
+      res.json({ plan: assembled.planText, cuisine, meals: mealsWithImages, source: 'library', isPro: user.tier === 'premium' });
       return;
     }
 
@@ -527,7 +528,8 @@ app.post('/api/plans/generate', userAuth, async (req: Request, res: Response) =>
     // Seed recipe library from LLM output — future plans assemble without LLM
     seedRecipesFromPlan(plan, cuisine, 'llm-new').catch(() => {});
     const meals = parsePlanMeals(plan);
-    res.json({ plan, cuisine, meals });
+    const mealsWithImages = await attachMealImages(meals);
+    res.json({ plan, cuisine, meals: mealsWithImages, isPro: user.tier === 'premium' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -583,8 +585,13 @@ app.post('/api/plans/cooking-steps', userAuth, async (req: Request, res: Respons
   const history = await getPlanHistory(userId, 1);
   if (!history.length) { res.status(400).json({ error: 'Belum ada rencana makan. Generate dulu ya!' }); return; }
 
+  // Cache: return stored steps if plan already has them
+  const cached = await getPlanCache(history[0].id);
+  if (cached?.cooking_steps) { res.json({ steps: cached.cooking_steps, cached: true }); return; }
+
   try {
     const steps = await generateCookingSteps(history[0].planText, user.locale as 'en' | 'id');
+    setPlanCache(history[0].id, 'cooking_steps', steps).catch(() => {});
     res.json({ steps });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -680,13 +687,20 @@ app.post('/api/plans/grocery-list', userAuth, async (req: Request, res: Response
   const user = await getUserById(userId);
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
   try {
-    const { week, planTexts } = await getWeekPlanTexts(userId);
+    const { week, planTexts, planIds } = await getWeekPlanTexts(userId);
     if (!planTexts.length) {
       res.status(400).json({ error: 'Belum ada rencana minggu ini. Generate dulu beberapa hari.' });
       return;
     }
+    // Cache: latest plan's stored grocery list covers the same week window
+    const cached = await getPlanCache(planIds[0]);
+    if (cached?.grocery_list) {
+      res.json({ week, list: cached.grocery_list, daysCovered: planTexts.length, cached: true });
+      return;
+    }
     const combined = planTexts.join('\n\n---\n\n');
     const list = await generateShoppingList(combined, user.locale as 'en' | 'id');
+    setPlanCache(planIds[0], 'grocery_list', list).catch(() => {});
     res.json({ week, list, daysCovered: planTexts.length });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

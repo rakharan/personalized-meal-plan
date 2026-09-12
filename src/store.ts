@@ -363,6 +363,27 @@ export async function migrateSchema(): Promise<void> {
   if (!imgCols.has('cost_usd')) {
     await pool.query('ALTER TABLE recipe_images ADD COLUMN cost_usd REAL NOT NULL DEFAULT 0.035');
   }
+
+  // ── Cached LLM outputs per plan (grocery list, cooking steps) ──
+  const mphCols = new Set(
+    (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'meal_plan_history'")).rows
+      .map((r: any) => r.column_name)
+  );
+  if (!mphCols.has('grocery_list')) {
+    await pool.query('ALTER TABLE meal_plan_history ADD COLUMN grocery_list TEXT');
+  }
+  if (!mphCols.has('cooking_steps')) {
+    await pool.query('ALTER TABLE meal_plan_history ADD COLUMN cooking_steps TEXT');
+  }
+}
+
+export async function getPlanCache(planId: number): Promise<{ grocery_list: string | null; cooking_steps: string | null } | null> {
+  const { rows } = await pool.query('SELECT grocery_list, cooking_steps FROM meal_plan_history WHERE id = $1', [planId]);
+  return rows[0] ?? null;
+}
+
+export async function setPlanCache(planId: number, field: 'grocery_list' | 'cooking_steps', value: string): Promise<void> {
+  await pool.query(`UPDATE meal_plan_history SET ${field} = $2 WHERE id = $1`, [planId, value]);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -911,9 +932,9 @@ export async function setUserTier(userId: number, tier: 'free' | 'premium'): Pro
 }
 
 // ── Weekly grocery list — last 7 days of plan text for LLM consolidation ──
-export async function getWeekPlanTexts(userId: number): Promise<{ week: string; planTexts: string[] }> {
+export async function getWeekPlanTexts(userId: number): Promise<{ week: string; planTexts: string[]; planIds: number[] }> {
   const { rows } = await pool.query(
-    `SELECT plan_text FROM meal_plan_history
+    `SELECT id, plan_text FROM meal_plan_history
      WHERE user_id = $1
        AND (created_at AT TIME ZONE 'Asia/Jakarta')::date >=
            ((NOW() AT TIME ZONE 'Asia/Jakarta')::date - 6)
@@ -923,7 +944,7 @@ export async function getWeekPlanTexts(userId: number): Promise<{ week: string; 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 6);
   const week = `${weekStart.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} — ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`;
-  return { week, planTexts: rows.map((r: any) => r.plan_text) };
+  return { week, planTexts: rows.map((r: any) => r.plan_text), planIds: rows.map((r: any) => r.id) };
 }
 
 // ── Leftover remix — yesterday's plan for LLM remix ──
