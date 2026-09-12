@@ -25,8 +25,19 @@
   let remixText = $state('');
   let remixLoading = $state(false);
   let remixInput = $state('');
+  let streakEl = $state<HTMLElement | null>(null);
+  let streakPop = $state(false);
 
   const isPro = $derived(profile?.tier === 'premium');
+
+  // Friendly error text — network down vs server vs action failure
+  function friendlyError(e: any): string {
+    const msg = e?.message || '';
+    if (e instanceof TypeError || /fetch|network|Failed to fetch/i.test(msg)) {
+      return 'Server nggak bisa dijangkau — cek koneksi atau API lagi down. Coba lagi sebentar.';
+    }
+    return msg || 'Ada yang error, coba lagi.';
+  }
 
   async function loadProfile() {
     loading = true;
@@ -48,7 +59,7 @@
         streak = data.streak || 0;
       }
     } catch (e: any) {
-      error = e.message;
+      error = friendlyError(e);
     } finally {
       loading = false;
     }
@@ -75,11 +86,34 @@
       const data = await res.json();
       lastPlan = { planText: data.plan, cuisine: data.cuisine, created: new Date().toISOString(), meals: data.meals || [], cookedAt: null };
     } catch (e: any) {
-      error = e.message;
+      error = friendlyError(e);
       // Restore old plan on failure
       await loadProfile();
     } finally {
       generating = false;
+    }
+  }
+
+  function burstConfetti() {
+    const hero = streakEl;
+    if (!hero) return;
+    const colors = ['#FFD27A', '#FF9A3D', '#5C8A4D', '#E8A33D', '#FFF3D6'];
+    for (let i = 0; i < 16; i++) {
+      const c = document.createElement('div');
+      c.style.cssText = `position:absolute;width:${6 + Math.random() * 4}px;height:${6 + Math.random() * 4}px;left:50%;top:60%;pointer-events:none;z-index:5;opacity:1;`;
+      c.style.background = colors[i % colors.length];
+      c.style.borderRadius = i % 2 ? '50%' : '2px';
+      const ang = (Math.PI * 2 * i) / 16 + Math.random() * .5;
+      const dist = 60 + Math.random() * 60;
+      const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist - 50;
+      const rot = Math.random() * 720 - 360;
+      hero.appendChild(c);
+      c.animate(
+        [{ transform: 'translate(0,0) rotate(0)', opacity: 1 },
+         { transform: `translate(${dx}px,${dy}px) rotate(${rot}deg)`, opacity: 0 }],
+        { duration: 1100, easing: 'cubic-bezier(.15,.6,.4,1)' }
+      );
+      setTimeout(() => c.remove(), 1200);
     }
   }
 
@@ -100,8 +134,12 @@
       cookingDone = true;
       if (lastPlan) lastPlan.cookedAt = new Date().toISOString();
       streak = data.streak || 0;
+      // Reward moment: number pop + confetti burst (mockup C)
+      streakPop = false;
+      requestAnimationFrame(() => { streakPop = true; setTimeout(() => { streakPop = false; }, 550); });
+      burstConfetti();
     } catch (e: any) {
-      error = e.message;
+      error = friendlyError(e);
     } finally {
       cookingLoadingDone = false;
     }
@@ -122,7 +160,7 @@
       const data = await res.json();
       cookingSteps = data.steps;
     } catch (e: any) {
-      error = e.message;
+      error = friendlyError(e);
     } finally {
       cookingLoading = false;
     }
@@ -144,7 +182,7 @@
       groceryList = data.list;
       groceryWeek = data.week;
     } catch (e: any) {
-      error = e.message;
+      error = friendlyError(e);
     } finally {
       groceryLoading = false;
     }
@@ -167,7 +205,7 @@
       const data = await res.json();
       remixText = data.remix;
     } catch (e: any) {
-      error = e.message;
+      error = friendlyError(e);
     } finally {
       remixLoading = false;
     }
@@ -272,11 +310,12 @@
   {:else if profile}
     <!-- ═══ Streak bar ═══ -->
     {#if (streak || 0) > 0}
-      <section class="streak-hero">
+      <section class="streak-hero" bind:this={streakEl}>
         <div class="streak-left">
-          <span class="streak-flame" aria-hidden="true">🔥</span>
+          <!-- svelte-ignore a11y_unknown_tag -- animated Noto fire (web component, loaded in index.html) -->
+          <dotlottie-player src="/fire-noto.lottie" autoplay loop style="width:52px;height:52px"></dotlottie-player>
           <div>
-            <div class="streak-num">{streak}</div>
+            <div class="streak-num" class:pop={streakPop}>{streak}</div>
             <div class="streak-label">hari beruntun</div>
           </div>
         </div>
@@ -482,7 +521,7 @@
     gap: var(--space-6); padding: var(--space-5) var(--space-6);
     background: linear-gradient(135deg, var(--primary), var(--leaf-400));
     border-radius: 24px 28px 20px 32px; margin-bottom: var(--space-6);
-    color: var(--text-on-primary); position: relative; overflow: hidden;
+    color: var(--text-on-primary); position: relative;
   }
   .streak-hero::before {
     content: ''; position: absolute; top: -60%; right: -10%;
@@ -492,6 +531,8 @@
   .streak-left { display: flex; align-items: center; gap: var(--space-3); position: relative; z-index: 1; }
   .streak-flame { font-size: var(--fs-2xl); }
   .streak-num { font-size: var(--fs-2xl); font-weight: var(--fw-bold); line-height: 1; font-family: var(--font-mono); }
+  .streak-num.pop { animation: numPop .5s cubic-bezier(.2, 2.2, .4, 1); }
+  @keyframes numPop { 0% { transform: scale(1); } 40% { transform: scale(1.45); } 100% { transform: scale(1); } }
   .streak-label { font-size: var(--fs-sm); opacity: .9; }
   .streak-right { text-align: right; position: relative; z-index: 1; min-width: 140px; }
   .streak-pct { font-size: var(--fs-xs); font-weight: var(--fw-semibold); opacity: .95; }

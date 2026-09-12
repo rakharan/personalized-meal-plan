@@ -37,8 +37,8 @@
     Sen: '🍛', Sel: '🍱', Rab: '🍲', Kam: '🫒', Jum: '🍜', Sab: '🥢', Min: '🌮',
   };
 
-  async function load() {
-    loading = true;
+  async function load(background = false) {
+    if (!background) loading = true;
     error = '';
     try {
       const [calRes, badgeRes, histRes] = await Promise.all([
@@ -66,8 +66,8 @@
     }
   }
 
-  function prevWeek() { weekOffset--; load(); }
-  function nextWeek() { if (weekOffset < 0) { weekOffset++; load(); } }
+  function prevWeek() { weekOffset--; load(true); }
+  function nextWeek() { if (weekOffset < 0) { weekOffset++; load(true); } }
 
   function weekLabel(): string {
     if (days.length === 0) return '';
@@ -109,9 +109,10 @@
     {:else if error}
       <Alert variant="danger" title="Error">{error}</Alert>
     {:else}
-      <!-- Week grid -->
+      <!-- Week grid — {#key} forces remount → fade on week change -->
+      {#key days[0]?.date ?? 'w'}
       <section class="week-grid">
-        {#each days as d}
+        {#each days as d (d.date)}
           <div class="day-card {d.status}" class:has-plan={!!d.planId}>
             <span class="status-dot" aria-hidden="true">
               {#if d.status === 'cooked'}✓{:else if d.status === 'skipped'}✕{:else if d.status === 'today'}●{:else}·{/if}
@@ -126,11 +127,11 @@
           </div>
         {/each}
       </section>
-
-      <!-- Streak + weekly goal -->
+      {/key}
       <section class="progress-row">
         <div class="streak-card">
-          <span class="streak-flame" aria-hidden="true">🔥</span>
+          <!-- svelte-ignore a11y_unknown_tag -->
+          <dotlottie-player src="/fire-noto.lottie" autoplay loop style="width:44px;height:44px"></dotlottie-player>
           <div>
             <div class="streak-num">{streak}</div>
             <div class="streak-label">hari beruntun</div>
@@ -203,7 +204,9 @@
   .week-grid {
     display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-3);
     margin-bottom: var(--space-6);
+    animation: weekFade .25s ease;
   }
+  @keyframes weekFade { from { opacity: .3; } to { opacity: 1; } }
   .day-card {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 16px 20px 12px 24px; padding: var(--space-3);

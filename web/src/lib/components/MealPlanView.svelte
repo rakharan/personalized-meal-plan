@@ -1,4 +1,5 @@
 <script lang="ts">
+  import MealDetail from './MealDetail.svelte';
   import { auth } from '$lib/stores/auth.svelte';
 
   interface Meal {
@@ -18,12 +19,12 @@
     isPro = false,
   }: {
     planText?: string;
-    meals?: Meal[];
-    isPro?: boolean;
+    meals?: Meal[];    isPro?: boolean;
   } = $props();
 
   let regenerating = $state<string | null>(null);
   let error = $state('');
+  let selectedMeal = $state<Meal | null>(null);
 
   async function regenerateMeal(meal: Meal) {
     regenerating = meal.name;
@@ -75,7 +76,7 @@
 {:else}
   <div class="meals-grid">
     {#each meals as meal, i (meal.name + i)}
-      <article class="meal-card" class:regenerating={regenerating === meal.name}>
+      <article class="meal-card" class:regenerating={regenerating === meal.name} onclick={() => { if (!regenerating) selectedMeal = meal; }} style:cursor={regenerating ? 'default' : 'pointer'}>
         {#if regenerating === meal.name}
           <!-- Skeleton for this card while regenerating -->
           <header class="meal-header">
@@ -124,7 +125,7 @@
               {/if}
               <button
                 class="regen-btn"
-                onclick={() => regenerateMeal(meal)}
+                onclick={(e) => { e.stopPropagation(); regenerateMeal(meal); }}
                 disabled={regenerating === meal.name}
                 aria-label="Ganti {meal.name}"
                 title="Regenerasi {meal.name}"
@@ -163,6 +164,10 @@
     <span class="total-sep">·</span>
     <span class="total-fat">{totals.fat}g lemak</span>
   </div>
+{/if}
+
+{#if selectedMeal}
+  <MealDetail meal={selectedMeal} {isPro} onclose={() => { selectedMeal = null; }} />
 {/if}
 
 <style>
